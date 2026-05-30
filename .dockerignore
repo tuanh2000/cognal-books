@@ -1,0 +1,30 @@
+# Keep the host's installed deps and build artifacts OUT of the Docker build
+# context. The Dockerfiles run their own `pnpm install` inside the image; copying
+# the host node_modules over that clean install leaves dangling pnpm symlinks
+# (host and container resolve slightly different peer hashes) and breaks the
+# in-image TypeScript build. Excluding them also shrinks the context a lot.
+**/node_modules
+node_modules
+
+# Build outputs (regenerated inside the image)
+**/dist
+**/.next
+apps/desktop/release
+packages/shared/dist
+
+# VCS / local tooling
+.git
+.gitignore
+.husky
+
+# Secrets & local env (compose injects env via `environment:`)
+.env
+**/.env
+**/.env.*
+!**/.env.example
+
+# Misc
+**/*.log
+**/.DS_Store
+.vscode
+.idea
