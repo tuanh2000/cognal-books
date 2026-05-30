@@ -1,0 +1,47 @@
+# ── Dependencies ─────────────────────────────────────────────
+node_modules/
+.pnpm-store/
+
+# ── Build output ─────────────────────────────────────────────
+dist/
+build/
+out/
+.next/
+*.tsbuildinfo
+next-env.d.ts
+
+# ── Caches ───────────────────────────────────────────────────
+.turbo/
+.cache/
+.vercel/
+
+# ── Environment / secrets (keep .env.example tracked) ────────
+.env
+.env.*
+!.env.example
+
+# ── Uploaded books & other large/user content ───────────────
+uploads/
+*.epub
+
+# ── Logs ─────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── Test coverage ────────────────────────────────────────────
+coverage/
+
+# ── Prisma ───────────────────────────────────────────────────
+prisma/migrations/.lock
+
+# ── Editors ──────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+
+# ── OS ───────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db

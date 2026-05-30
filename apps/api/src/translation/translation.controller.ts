@@ -1,0 +1,120 @@
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  NotFoundException,
+  Param,
+  Post,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
+import type { Response } from 'express';
+import {
+  translateSchema,
+  type TranslateDto,
+  type TranslateStreamEvent,
+} from '@reader/shared';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser, JwtUser } from '../common/current-user.decorator';
+import { ZodValidationPipe } from '../common/zod-validation.pipe';
+import { SettingsService } from '../settings/settings.service';
+import { TranslationService } from './translation.service';
+
+@UseGuards(JwtAuthGuard)
+@Controller()
+export class TranslationController {
+  constructor(
+    private readonly translation: TranslationService,
+    private readonly settings: SettingsService,
+  ) {}
+
+  /** Streams a translation as Server-Sent Events. Returns cache hit instantly. */
+  @Post('translate')
+  async translate(
+    @CurrentUser() user: JwtUser,
+    @Body(new ZodValidationPipe(translateSchema)) dto: TranslateDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+
+    const send = (event: TranslateStreamEvent) => res.write(`data: ${JSON.stringify(event)}\n\n`);
+    const hash = this.translation.hash(dto.text, dto.targetLang);
+
+    // Save a located mark when the request is tied to a book location.
+    const saveMark = (text: string) => {
+      if (dto.bookId && dto.cfiRange) {
+        return this.translation.saveMark(
+          user.id,
+          dto.bookId,
+          dto.cfiRange,
+          dto.text,
+          text,
+          dto.targetLang,
+        );
+      }
+      return Promise.resolve();
+    };
+
+    try {
+      // `force` bypasses the cache to re-translate and overwrite.
+      const cached = dto.force ? null : await this.translation.findCached(hash);
+      if (cached) {
+        send({ type: 'meta', hash, cached: true });
+        send({ type: 'token', value: cached.translatedText });
+        await saveMark(cached.translatedText);
+        send({ type: 'done', translatedText: cached.translatedText });
+        res.end();
+        return;
+      }
+
+      send({ type: 'meta', hash, cached: false });
+      let full = '';
+      const meta: { provider?: string } = {};
+      // Use the user's own API keys when configured; falls back to shared env keys.
+      const userProviders = await this.settings.buildUserProviders(user.id);
+      for await (const token of this.translation.stream(
+        dto.text,
+        dto.targetLang,
+        dto.context,
+        meta,
+        userProviders,
+      )) {
+        full += token;
+        send({ type: 'token', value: token });
+      }
+
+      await this.translation.persist(hash, dto.text, full, dto.targetLang);
+      await saveMark(full);
+      send({ type: 'done', translatedText: full, provider: meta.provider });
+      res.end();
+    } catch (err) {
+      send({ type: 'error', message: (err as Error).message ?? 'Translation failed' });
+      res.end();
+    }
+  }
+
+  /** Direct cache lookup by hash (non-streaming). */
+  @Get('translations/:hash')
+  async byHash(@Param('hash') hash: string) {
+    const cached = await this.translation.findCached(hash);
+    if (!cached) throw new NotFoundException('Translation not cached');
+    return cached;
+  }
+
+  /** All translations the user has saved against this book (for highlights). */
+  @Get('books/:bookId/translations')
+  listSaved(@CurrentUser() user: JwtUser, @Param('bookId') bookId: string) {
+    return this.translation.listMarks(user.id, bookId);
+  }
+
+  /** Remove a saved translation. */
+  @Delete('books/:bookId/translations/:id')
+  async deleteSaved(@CurrentUser() user: JwtUser, @Param('id') id: string) {
+    await this.translation.deleteMark(user.id, id);
+    return { ok: true };
+  }
+}

@@ -1,0 +1,15 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Allow native/postinstall build scripts only for trusted deps.
+allowBuilds:
+  '@nestjs/core': true
+  '@prisma/client': true
+  '@prisma/engines': true
+  prisma: true
+  sharp: true
+  unrs-resolver: true
+  esbuild: true
+  core-js: false
+  es5-ext: false

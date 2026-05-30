@@ -1,0 +1,10 @@
+# Local-development overrides (applied automatically by `docker compose`).
+# Publishes Postgres/Redis to the host so you can run the apps natively
+# (`pnpm dev`) against the containerized datastores.
+services:
+  postgres:
+    ports:
+      - '5432:5432'
+  redis:
+    ports:
+      - '6379:6379'

@@ -1,0 +1,142 @@
+// Prisma schema for the AI-assisted EPUB reader.
+// Models: User, Book, Chapter, ReadingProgress, Translation.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  books             Book[]
+  progress          ReadingProgress[]
+  savedTranslations SavedTranslation[]
+  apiKeys           UserApiKey[]
+
+  @@map("users")
+}
+
+// A user's own API key for an AI platform (OpenAI, Anthropic, Gemini, …). The
+// key is encrypted at the application layer before being stored here; only the
+// ciphertext lives in the DB. A user may keep SEVERAL keys per provider — they
+// are rotated at translation time to multiply free-tier rate limits.
+model UserApiKey {
+  id           String   @id @default(uuid())
+  userId       String
+  // Provider id, e.g. "openai" | "anthropic" | "gemini" | "deepseek" | "groq"
+  provider     String
+  // AES-256-GCM ciphertext, format "iv:authTag:ciphertext" (hex)
+  encryptedKey String
+  // Optional model override; falls back to the provider default when null
+  model        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, provider])
+  @@map("user_api_keys")
+}
+
+model Book {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  author    String?
+  language  String?
+  // Path on disk (inside UPLOAD_DIR) to the stored .epub
+  filePath  String
+  fileSize  Int
+  // Path on disk to the extracted cover image, if any
+  coverPath String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chapters          Chapter[]
+  progress          ReadingProgress[]
+  savedTranslations SavedTranslation[]
+
+  @@index([userId])
+  @@map("books")
+}
+
+model Chapter {
+  id     String @id @default(uuid())
+  bookId String
+  label  String
+  // href into the epub spine (e.g. "OEBPS/chapter1.xhtml")
+  href   String
+  order  Int
+
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@index([bookId])
+  @@map("chapters")
+}
+
+model ReadingProgress {
+  id           String   @id @default(uuid())
+  userId       String
+  bookId       String
+  cfi          String
+  percentage   Float    @default(0)
+  chapterLabel String?
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  // One progress row per (user, book)
+  @@unique([userId, bookId])
+  @@index([userId])
+  @@map("reading_progress")
+}
+
+model Translation {
+  id             String   @id @default(uuid())
+  // SHA256(sourceText + ':' + targetLang)
+  hash           String   @unique
+  sourceText     String
+  translatedText String
+  targetLang     String
+  createdAt      DateTime @default(now())
+
+  @@index([targetLang])
+  @@map("translations")
+}
+
+// A translation the user saved against a specific location in a book. Powers
+// the in-reader highlights and "load from DB instead of asking the AI" flow.
+// `Translation` remains the global content cache; this is per-user/per-book.
+model SavedTranslation {
+  id             String   @id @default(uuid())
+  userId         String
+  bookId         String
+  // EPUB CFI range of the highlighted selection (stable for a given file)
+  cfiRange       String
+  sourceText     String
+  translatedText String
+  targetLang     String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  // One saved translation per exact location per user.
+  @@unique([userId, bookId, cfiRange])
+  @@index([userId, bookId])
+  @@map("saved_translations")
+}
