@@ -113,6 +113,38 @@ export type TranslateStreamEvent =
   | { type: 'done'; translatedText: string; provider?: string }
   | { type: 'error'; message: string };
 
+/* ─────────────────────────  Discuss (summarise + Q&A)  ───────────────── */
+
+/** One turn in a passage discussion (the system prompt is built server-side). */
+export const discussMessageSchema = z.object({
+  role: z.enum(['user', 'assistant']),
+  content: z.string().min(1).max(5000),
+});
+export type DiscussMessage = z.infer<typeof discussMessageSchema>;
+
+/**
+ * Ask the AI to summarise / answer questions about a selected passage. The
+ * server enriches the prompt with the book's metadata (title, author) so the
+ * model has context for what it is reading. The conversation is stateless: the
+ * client sends the full message history each turn.
+ */
+export const discussSchema = z.object({
+  bookId: z.string().uuid(),
+  // The selected passage the discussion is about.
+  text: z.string().min(1).max(8000),
+  // EPUB CFI range of the selection (carried through for the UI; not required).
+  cfiRange: z.string().max(2000).optional(),
+  // The Q&A so far. The first message is typically an auto "summarise" prompt.
+  messages: z.array(discussMessageSchema).min(1).max(40),
+});
+export type DiscussDto = z.infer<typeof discussSchema>;
+
+/** SSE event payloads streamed from POST /discuss */
+export type DiscussStreamEvent =
+  | { type: 'token'; value: string }
+  | { type: 'done'; provider?: string }
+  | { type: 'error'; message: string };
+
 /* ─────────────────  AI provider settings (per-user API keys)  ───────────────── */
 
 // The AI platforms a user can supply their own API key for. Every provider is

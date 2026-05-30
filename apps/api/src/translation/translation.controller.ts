@@ -1,8 +1,16 @@
 import { Body, Controller, Delete, Get, NotFoundException, Param, Post, Res } from '@nestjs/common';
 import type { Response } from 'express';
-import { translateSchema, type TranslateDto, type TranslateStreamEvent } from '@reader/shared';
+import {
+  discussSchema,
+  translateSchema,
+  type DiscussDto,
+  type DiscussStreamEvent,
+  type TranslateDto,
+  type TranslateStreamEvent,
+} from '@reader/shared';
 import { CurrentUser, JwtUser } from '../common/current-user.decorator';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
+import { BooksService } from '../books/books.service';
 import { SettingsService } from '../settings/settings.service';
 import { TranslationService } from './translation.service';
 
@@ -11,6 +19,7 @@ export class TranslationController {
   constructor(
     private readonly translation: TranslationService,
     private readonly settings: SettingsService,
+    private readonly books: BooksService,
   ) {}
 
   /** Streams a translation as Server-Sent Events. Returns cache hit instantly. */
@@ -77,6 +86,46 @@ export class TranslationController {
       res.end();
     } catch (err) {
       send({ type: 'error', message: (err as Error).message ?? 'Translation failed' });
+      res.end();
+    }
+  }
+
+  /**
+   * Streams a reading-assistant reply (summary or answer) about a selected
+   * passage as Server-Sent Events. The book's metadata is looked up server-side
+   * — verifying ownership — and injected into the prompt for context.
+   */
+  @Post('discuss')
+  async discuss(
+    @CurrentUser() user: JwtUser,
+    @Body(new ZodValidationPipe(discussSchema)) dto: DiscussDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+
+    const send = (event: DiscussStreamEvent) => res.write(`data: ${JSON.stringify(event)}\n\n`);
+
+    try {
+      // getDetail enforces ownership (throws if the book isn't this user's).
+      const book = await this.books.getDetail(user.id, dto.bookId);
+      const meta: { provider?: string } = {};
+      const userProviders = await this.settings.buildUserProviders(user.id);
+      for await (const token of this.translation.discuss(
+        dto.text,
+        dto.messages,
+        { title: book.title, author: book.author, language: book.language },
+        meta,
+        userProviders,
+      )) {
+        send({ type: 'token', value: token });
+      }
+      send({ type: 'done', provider: meta.provider });
+      res.end();
+    } catch (err) {
+      send({ type: 'error', message: (err as Error).message ?? 'Discussion failed' });
       res.end();
     }
   }

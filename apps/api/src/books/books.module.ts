@@ -7,5 +7,6 @@ import { ParserModule } from '../parsers/parser.module';
   imports: [ParserModule],
   controllers: [BooksController],
   providers: [BooksService],
+  exports: [BooksService],
 })
 export class BooksModule {}

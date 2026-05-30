@@ -13,6 +13,7 @@ import {
   Loader2,
   Minus,
   Plus,
+  Sparkles,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { SavedTranslation } from '@reader/shared';
@@ -20,6 +21,7 @@ import { useReaderPrefs } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { TranslationPanel, type PanelRequest } from './translation-panel';
+import { DiscussPanel, type DiscussRequest } from './discuss-panel';
 import { cn } from '@/lib/utils';
 
 interface SelectionState {
@@ -90,6 +92,7 @@ export function EpubReader({ bookId }: { bookId: string }) {
   const [chapterLabel, setChapterLabel] = useState<string>('');
   const [selection, setSelection] = useState<SelectionState | null>(null);
   const [translateRequest, setTranslateRequest] = useState<PanelRequest | null>(null);
+  const [discussRequest, setDiscussRequest] = useState<DiscussRequest | null>(null);
 
   // Draw a dim highlight once; clicking it reopens the panel with the stored
   // text. The returned annotation lets us toggle the active class on its
@@ -103,6 +106,7 @@ export function EpubReader({ bookId }: { bookId: string }) {
         {},
         () => {
           const m = marksRef.current.get(cfiRange);
+          setDiscussRequest(null);
           setTranslateRequest({
             text: m?.sourceText ?? '',
             cfiRange,
@@ -217,16 +221,12 @@ export function EpubReader({ bookId }: { bookId: string }) {
     [resolvedTheme, fontSize],
   );
 
-
   // ── Initialise the book once. ──
   useEffect(() => {
     let cancelled = false;
 
     async function init() {
-      const [detail, buffer] = await Promise.all([
-        api.getBook(bookId),
-        api.getBookFile(bookId),
-      ]);
+      const [detail, buffer] = await Promise.all([api.getBook(bookId), api.getBookFile(bookId)]);
       if (cancelled || !viewerRef.current) return;
 
       // Reset per-book mark state (the component may be reused across books).
@@ -290,9 +290,7 @@ export function EpubReader({ bookId }: { bookId: string }) {
 
       rendition.on('relocated', (location: any) => {
         const cfi: string = location.start.cfi;
-        const pct = book.locations.length()
-          ? book.locations.percentageFromCfi(cfi) * 100
-          : 0;
+        const pct = book.locations.length() ? book.locations.percentageFromCfi(cfi) * 100 : 0;
         setPercentage(pct);
 
         const href: string = location.start.href;
@@ -377,7 +375,12 @@ export function EpubReader({ bookId }: { bookId: string }) {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       api
-        .saveProgress({ bookId, cfi, percentage: Math.min(100, Math.max(0, pct)), chapterLabel: label })
+        .saveProgress({
+          bookId,
+          cfi,
+          percentage: Math.min(100, Math.max(0, pct)),
+          chapterLabel: label,
+        })
         .catch(() => undefined);
     }, 800);
   }
@@ -409,10 +412,20 @@ export function EpubReader({ bookId }: { bookId: string }) {
         <p className="line-clamp-1 px-2 text-sm text-muted-foreground">{chapterLabel}</p>
 
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" aria-label="Smaller text" onClick={() => setFontSize(fontSize - 10)}>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Smaller text"
+            onClick={() => setFontSize(fontSize - 10)}
+          >
             <Minus className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" aria-label="Larger text" onClick={() => setFontSize(fontSize + 10)}>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Larger text"
+            onClick={() => setFontSize(fontSize + 10)}
+          >
             <Plus className="h-4 w-4" />
           </Button>
           <ThemeToggle />
@@ -441,62 +454,76 @@ export function EpubReader({ bookId }: { bookId: string }) {
 
         {/* Reading area */}
         <div className="relative min-h-0 flex-1 overflow-hidden">
-        {loading && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center bg-background">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        )}
-
-        {/* Page nav arrows */}
-        <button
-          onClick={() => renditionRef.current?.prev()}
-          aria-label="Previous page"
-          className="absolute left-0 top-0 z-10 flex h-full w-12 items-center justify-center text-muted-foreground/40 hover:bg-accent/40 hover:text-foreground"
-        >
-          <ChevronLeft className="h-6 w-6" />
-        </button>
-        <button
-          onClick={() => renditionRef.current?.next()}
-          aria-label="Next page"
-          // When the translation panel is open it covers the right edge, so
-          // shift this arrow to sit just left of the panel and stay clickable.
-          className={cn(
-            'absolute top-0 z-10 flex h-full w-12 items-center justify-center text-muted-foreground/40 transition-[right] hover:bg-accent/40 hover:text-foreground',
-            panelOpen ? 'right-0 md:right-[28rem]' : 'right-0',
+          {loading && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-background">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
           )}
-        >
-          <ChevronRight className="h-6 w-6" />
-        </button>
 
-        {/* The EPUB renders here. NOTE: the render target must stay padding-free —
+          {/* Page nav arrows */}
+          <button
+            onClick={() => renditionRef.current?.prev()}
+            aria-label="Previous page"
+            className="absolute left-0 top-0 z-10 flex h-full w-12 items-center justify-center text-muted-foreground/40 hover:bg-accent/40 hover:text-foreground"
+          >
+            <ChevronLeft className="h-6 w-6" />
+          </button>
+          <button
+            onClick={() => renditionRef.current?.next()}
+            aria-label="Next page"
+            // When the translation panel is open it covers the right edge, so
+            // shift this arrow to sit just left of the panel and stay clickable.
+            className={cn(
+              'absolute top-0 z-10 flex h-full w-12 items-center justify-center text-muted-foreground/40 transition-[right] hover:bg-accent/40 hover:text-foreground',
+              panelOpen ? 'right-0 md:right-[28rem]' : 'right-0',
+            )}
+          >
+            <ChevronRight className="h-6 w-6" />
+          </button>
+
+          {/* The EPUB renders here. NOTE: the render target must stay padding-free —
             padding on this element breaks EPUB.js column/step math so page turns
             stop working. Reading margins live on this wrapper + the epub theme.
             The wide max-width lets `spread: 'auto'` show a two-page spread on
             desktop while collapsing to one page on narrow/mobile screens, and
             scales up to use large screens (more content per page). */}
-        <div className="mx-auto h-full w-full max-w-[1600px] px-10 lg:px-16">
-          <div ref={viewerRef} className="h-full w-full" />
-        </div>
-
-        {/* Selection popup */}
-        {selection && (
-          <div
-            className="fixed z-40 -translate-x-1/2 -translate-y-full animate-fade-in"
-            style={{ left: selection.x, top: selection.y - 8 }}
-          >
-            <Button
-              size="sm"
-              className="shadow-lg"
-              onClick={() => {
-                setTranslateRequest({ text: selection.text, cfiRange: selection.cfiRange });
-                setSelection(null);
-              }}
-            >
-              <Languages className="h-4 w-4" />
-              Translate
-            </Button>
+          <div className="mx-auto h-full w-full max-w-[1600px] px-10 lg:px-16">
+            <div ref={viewerRef} className="h-full w-full" />
           </div>
-        )}
+
+          {/* Selection popup */}
+          {selection && (
+            <div
+              className="fixed z-40 flex -translate-x-1/2 -translate-y-full gap-1.5 animate-fade-in"
+              style={{ left: selection.x, top: selection.y - 8 }}
+            >
+              <Button
+                size="sm"
+                className="shadow-lg"
+                onClick={() => {
+                  setDiscussRequest(null);
+                  setTranslateRequest({ text: selection.text, cfiRange: selection.cfiRange });
+                  setSelection(null);
+                }}
+              >
+                <Languages className="h-4 w-4" />
+                Translate
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="shadow-lg"
+                onClick={() => {
+                  setTranslateRequest(null);
+                  setDiscussRequest({ text: selection.text, cfiRange: selection.cfiRange });
+                  setSelection(null);
+                }}
+              >
+                <Sparkles className="h-4 w-4" />
+                Discuss
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -510,6 +537,16 @@ export function EpubReader({ bookId }: { bookId: string }) {
         bookId={bookId}
         onClose={() => setTranslateRequest(null)}
         onTranslated={handleTranslated}
+        onDiscuss={(text, cfiRange) => {
+          setTranslateRequest(null);
+          setDiscussRequest({ text, cfiRange });
+        }}
+      />
+
+      <DiscussPanel
+        request={discussRequest}
+        bookId={bookId}
+        onClose={() => setDiscussRequest(null)}
       />
     </div>
   );

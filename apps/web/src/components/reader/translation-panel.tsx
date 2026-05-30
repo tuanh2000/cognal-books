@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Languages, Loader2, X, Database, Bookmark, RefreshCw } from 'lucide-react';
+import { Languages, Loader2, X, Database, Bookmark, RefreshCw, Sparkles } from 'lucide-react';
 import { streamTranslation } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -19,10 +19,12 @@ interface Props {
   onClose: () => void;
   /** Called when a fresh translation completes, so the reader can highlight it. */
   onTranslated?: (cfiRange: string, sourceText: string, translatedText: string) => void;
+  /** Open the AI discussion panel for this passage (summarise + ask questions). */
+  onDiscuss?: (text: string, cfiRange?: string) => void;
 }
 
 /** Side panel: streams a translation, or shows a saved one with a re-translate button. */
-export function TranslationPanel({ request, bookId, onClose, onTranslated }: Props) {
+export function TranslationPanel({ request, bookId, onClose, onTranslated, onDiscuss }: Props) {
   const [output, setOutput] = useState('');
   const [loading, setLoading] = useState(false);
   const [cached, setCached] = useState(false);
@@ -113,6 +115,17 @@ export function TranslationPanel({ request, bookId, onClose, onTranslated }: Pro
           )}
         </div>
         <div className="flex items-center gap-1">
+          {onDiscuss && request && (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Discuss with AI"
+              title="Summarise & ask the AI about this passage"
+              onClick={() => onDiscuss(request.text, request.cfiRange)}
+            >
+              <Sparkles className="h-4 w-4" />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
