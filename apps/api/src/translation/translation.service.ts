@@ -143,6 +143,23 @@ export class TranslationService {
       { role: 'user' as const, content: userContent },
     ];
 
+    yield* this.streamChat(messages, meta, providers);
+  }
+
+  /**
+   * Core provider loop shared by every chat-completion feature (translation,
+   * passage discussion, …). Tries each provider in priority order; if one fails
+   * BEFORE emitting any token (quota, auth, rate limit, network) it transparently
+   * rotates to the next key, then the next provider. A failure mid-stream cannot
+   * be retried cleanly (tokens are already on the wire), so it is propagated.
+   * `meta.provider` is set to the provider that served the response.
+   */
+  private async *streamChat(
+    messages: { role: 'system' | 'user' | 'assistant'; content: string }[],
+    meta: { provider?: string } | undefined,
+    providers: TranslationProvider[],
+    temperature = 0.2,
+  ): AsyncGenerator<string> {
     let lastError: unknown;
     for (const provider of providers) {
       const n = provider.clients.length;
@@ -157,7 +174,7 @@ export class TranslationService {
         try {
           const completion = await client.chat.completions.create({
             model: provider.model,
-            temperature: 0.2,
+            temperature,
             stream: true,
             messages,
           });
@@ -186,7 +203,57 @@ export class TranslationService {
       }
     }
 
-    throw lastError instanceof Error ? lastError : new Error('All translation providers failed');
+    throw lastError instanceof Error ? lastError : new Error('All AI providers failed');
+  }
+
+  /**
+   * Stream a reading-assistant reply about a selected passage. `bookContext`
+   * (title / author) is injected into the system prompt so the model knows what
+   * it is reading; the passage itself is pinned there too, and the running Q&A
+   * is supplied as the conversation. Replies are written in Vietnamese.
+   */
+  async *discuss(
+    passage: string,
+    conversation: { role: 'user' | 'assistant'; content: string }[],
+    bookContext: { title: string; author?: string | null; language?: string | null },
+    meta?: { provider?: string },
+    providersOverride?: TranslationProvider[],
+  ): AsyncGenerator<string> {
+    const providers =
+      providersOverride && providersOverride.length > 0 ? providersOverride : this.providers;
+
+    if (providers.length === 0) {
+      throw new Error(
+        'No AI provider configured. Add an OpenAI, Anthropic, Gemini, Groq, or OpenRouter API key.',
+      );
+    }
+
+    const author = bookContext.author ? ` by ${bookContext.author}` : '';
+    const system = [
+      'You are a knowledgeable reading assistant. You help a reader understand a passage',
+      'from a book they are reading. Use the book and passage below as your primary context.',
+      '',
+      `Book: "${bookContext.title}"${author}.`,
+      '',
+      'The reader has selected this passage:',
+      '"""',
+      passage,
+      '"""',
+      '',
+      'Guidelines:',
+      '- Always reply in Vietnamese, in clear and natural prose.',
+      '- Ground your answer in the passage. You may add relevant background knowledge,',
+      '  but do not invent specific facts about the book that the passage does not support.',
+      '- Keep technical and software/IT terms, product names, and proper nouns in English.',
+      '- Be concise and well-structured. Use short paragraphs or bullet points when helpful.',
+    ].join('\n');
+
+    const messages = [
+      { role: 'system' as const, content: system },
+      ...conversation.map((m) => ({ role: m.role, content: m.content })),
+    ];
+
+    yield* this.streamChat(messages, meta, providers, 0.4);
   }
 
   /** Persist a completed translation to SQLite (best-effort, never throws). */

@@ -3,6 +3,8 @@ import type {
   ApiKeySummary,
   BookDetail,
   BookListItem,
+  DiscussDto,
+  DiscussStreamEvent,
   ReadingProgress,
   SavedTranslation,
   TranslateDto,
@@ -141,6 +143,59 @@ export async function streamTranslation(
       if (event.type === 'meta') handlers.onMeta?.(event.cached);
       else if (event.type === 'token') handlers.onToken?.(event.value);
       else if (event.type === 'done') handlers.onDone?.(event.translatedText, event.provider);
+      else if (event.type === 'error') handlers.onError?.(event.message);
+    }
+  }
+}
+
+/* ── Streaming passage discussion (summary + Q&A, SSE over POST) ── */
+export async function streamDiscuss(
+  dto: DiscussDto,
+  handlers: {
+    onToken?: (value: string) => void;
+    onDone?: (provider?: string) => void;
+    onError?: (message: string) => void;
+  },
+  signal?: AbortSignal,
+): Promise<void> {
+  const res = await fetch(`${API_URL}/discuss`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(dto),
+    signal,
+  });
+
+  if (!res.ok || !res.body) {
+    handlers.onError?.(`Discussion request failed (${res.status})`);
+    return;
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    // SSE frames are separated by a blank line.
+    const frames = buffer.split('\n\n');
+    buffer = frames.pop() ?? '';
+
+    for (const frame of frames) {
+      const line = frame.split('\n').find((l) => l.startsWith('data:'));
+      if (!line) continue;
+      const payload = line.slice(5).trim();
+      if (!payload) continue;
+      let event: DiscussStreamEvent;
+      try {
+        event = JSON.parse(payload);
+      } catch {
+        continue;
+      }
+      if (event.type === 'token') handlers.onToken?.(event.value);
+      else if (event.type === 'done') handlers.onDone?.(event.provider);
       else if (event.type === 'error') handlers.onError?.(event.message);
     }
   }
