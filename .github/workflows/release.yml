@@ -41,7 +41,9 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # pnpm 11.x requires Node >= 22.13 (uses the node:sqlite builtin).
+          # Build-time only; Electron ships its own Node runtime to users.
+          node-version: 22
 
       - name: Verify tag matches app version
         if: startsWith(github.ref, 'refs/tags/v')
