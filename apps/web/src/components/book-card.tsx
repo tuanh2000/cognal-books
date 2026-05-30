@@ -28,7 +28,7 @@ export function BookCard({ book }: { book: BookListItem }) {
 
   return (
     <Link
-      href={`/read/${book.id}`}
+      href={`/read?bookId=${book.id}`}
       className="group flex flex-col overflow-hidden rounded-xl border bg-card transition-all hover:-translate-y-1 hover:shadow-lg"
     >
       <div className="relative aspect-[2/3] w-full overflow-hidden bg-muted">

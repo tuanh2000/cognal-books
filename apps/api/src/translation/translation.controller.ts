@@ -1,27 +1,11 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  NotFoundException,
-  Param,
-  Post,
-  Res,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, NotFoundException, Param, Post, Res } from '@nestjs/common';
 import type { Response } from 'express';
-import {
-  translateSchema,
-  type TranslateDto,
-  type TranslateStreamEvent,
-} from '@reader/shared';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { translateSchema, type TranslateDto, type TranslateStreamEvent } from '@reader/shared';
 import { CurrentUser, JwtUser } from '../common/current-user.decorator';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { SettingsService } from '../settings/settings.service';
 import { TranslationService } from './translation.service';
 
-@UseGuards(JwtAuthGuard)
 @Controller()
 export class TranslationController {
   constructor(

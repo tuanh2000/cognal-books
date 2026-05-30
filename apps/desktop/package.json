@@ -1,0 +1,71 @@
+{
+  "name": "@reader/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electron shell for the AI Reading Assistant (local-only macOS desktop app).",
+  "main": "dist/main.js",
+  "scripts": {
+    "clean": "rimraf dist .api-bundle release",
+    "build": "tsc -p tsconfig.json",
+    "dev": "pnpm run build && cross-env ELECTRON_DEV=1 electron .",
+    "prepare-api": "node scripts/prepare-api-bundle.mjs",
+    "dist": "pnpm run build && pnpm run prepare-api && electron-builder"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "cross-env": "^7.0.3",
+    "electron": "^34.0.0",
+    "electron-builder": "^25.1.8",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.7.3"
+  },
+  "build": {
+    "appId": "app.reader.desktop",
+    "productName": "AI Reading Assistant",
+    "directories": {
+      "buildResources": "build",
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../web/out",
+        "to": "web",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": ".api-bundle",
+        "to": "api",
+        "filter": [
+          "**/*",
+          "!**/*.md",
+          "!**/*.ts.map",
+          "!_gen.db",
+          "!**/*.db",
+          "!.reader-data/**",
+          "!.env"
+        ]
+      }
+    ],
+    "asar": true,
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "identity": null,
+      "x64ArchFiles": "*engine-darwin*"
+    }
+  }
+}

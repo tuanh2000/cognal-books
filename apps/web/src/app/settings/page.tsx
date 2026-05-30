@@ -6,7 +6,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, KeyRound, Loader2, Plus, Trash2 } from 'lucide-react';
 import { AI_PROVIDERS, AI_PROVIDER_INFO, type AiProvider } from '@reader/shared';
 import { api, ApiError } from '@/lib/api';
-import { useAuthGuard } from '@/lib/use-auth-guard';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +13,6 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function SettingsPage() {
-  const ready = useAuthGuard();
   const queryClient = useQueryClient();
 
   const [provider, setProvider] = useState<AiProvider>(AI_PROVIDERS[0]);
@@ -25,7 +23,6 @@ export default function SettingsPage() {
   const { data: keys, isLoading } = useQuery({
     queryKey: ['api-keys'],
     queryFn: api.listApiKeys,
-    enabled: ready,
   });
 
   const add = useMutation({
@@ -44,8 +41,6 @@ export default function SettingsPage() {
     mutationFn: (id: string) => api.deleteApiKey(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['api-keys'] }),
   });
-
-  if (!ready) return null;
 
   const info = AI_PROVIDER_INFO[provider];
 
@@ -72,8 +67,8 @@ export default function SettingsPage() {
               <KeyRound className="h-5 w-5" /> Add an AI API key
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              Choose a platform first, then paste an API key for it. You can add several keys for the
-              same platform — they&apos;re rotated automatically to spread usage across multiple
+              Choose a platform first, then paste an API key for it. You can add several keys for
+              the same platform — they&apos;re rotated automatically to spread usage across multiple
               free-tier keys. Keys are encrypted before they are stored.
             </p>
           </CardHeader>

@@ -2,28 +2,18 @@
 
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { BookOpen, Loader2, LogOut, Settings } from 'lucide-react';
+import { BookOpen, Loader2, Settings } from 'lucide-react';
 import { api } from '@/lib/api';
-import { useAuthStore } from '@/lib/store';
-import { useAuthGuard } from '@/lib/use-auth-guard';
 import { UploadDropzone } from '@/components/upload-dropzone';
 import { BookCard } from '@/components/book-card';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
-import { useRouter } from 'next/navigation';
 
 export default function LibraryPage() {
-  const ready = useAuthGuard();
-  const router = useRouter();
-  const { user, logout } = useAuthStore();
-
   const { data: books, isLoading } = useQuery({
     queryKey: ['books'],
     queryFn: api.listBooks,
-    enabled: ready,
   });
-
-  if (!ready) return null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -34,26 +24,12 @@ export default function LibraryPage() {
             <span className="text-xl font-semibold tracking-tight">Lumen</span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="mr-2 hidden text-sm text-muted-foreground sm:inline">
-              {user?.name ?? user?.email}
-            </span>
             <Button asChild variant="ghost" size="icon" aria-label="Settings">
               <Link href="/settings">
                 <Settings className="h-5 w-5" />
               </Link>
             </Button>
             <ThemeToggle />
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Log out"
-              onClick={() => {
-                logout();
-                router.replace('/login');
-              }}
-            >
-              <LogOut className="h-5 w-5" />
-            </Button>
           </div>
         </div>
       </header>

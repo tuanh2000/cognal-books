@@ -1,0 +1,107 @@
+name: Release (macOS)
+
+# Build the macOS desktop app and publish it as a downloadable GitHub Release.
+#
+# How to cut a release:
+#   1. Bump the version in apps/desktop/package.json (and ideally the root
+#      package.json) to e.g. 0.2.0.
+#   2. Commit, then tag and push:
+#        git tag v0.2.0
+#        git push origin v0.2.0
+#   3. This workflow builds the DMG on an Apple-Silicon runner and attaches it to
+#      a GitHub Release named after the tag. Other users download the .dmg from
+#      the repo's Releases page.
+#
+# You can also run it manually (Actions tab → Run workflow) to produce a
+# downloadable CI artifact without creating a public release.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write # needed to create/update the GitHub Release
+
+jobs:
+  build-macos:
+    # macos-14 (Apple Silicon). electron-builder downloads the x64 Electron and
+    # lipos a universal app; `prisma generate` fetches both macOS engines (see
+    # schema binaryTargets), so the universal DMG runs on Apple Silicon + Intel.
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        # Version is read from the root package.json "packageManager" field.
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          # pnpm 11.x requires Node >= 22.13 (uses the node:sqlite builtin).
+          # Build-time only; Electron ships its own Node runtime to users.
+          node-version: 22
+
+      - name: Verify tag matches app version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./apps/desktop/package.json').version")"
+          echo "tag=$TAG  apps/desktop/package.json=$PKG"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::Tag v$TAG does not match apps/desktop/package.json version $PKG. Bump the version and re-tag."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build & package DMG
+        env:
+          # The app is not code-signed (build.mac.identity = null). Stop
+          # electron-builder from probing the CI keychain for signing certs.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: pnpm run desktop:dist
+
+      - name: List build output
+        run: ls -lh apps/desktop/release
+
+      # Always expose the DMG as a CI artifact (useful for manual/test runs).
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-reading-assistant-macos-universal
+          path: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.dmg.blockmap
+          if-no-files-found: error
+
+      # On a version tag, publish a GitHub Release with the DMG attached.
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.dmg.blockmap
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          body: |
+            ## AI Reading Assistant — macOS (universal)
+
+            Download the **`.dmg`** below, open it, and drag the app to your
+            Applications folder. Runs on both **Apple Silicon** and **Intel** Macs.
+
+            ### First launch (important)
+            This build is **not notarized/code-signed**, so macOS Gatekeeper will
+            warn that the app "cannot be opened". To allow it:
+
+            - **Right-click** (or Control-click) the app → **Open** → **Open**, or
+            - Run once in Terminal:
+              `xattr -dr com.apple.quarantine "/Applications/AI Reading Assistant.app"`
+
+            ### Notes
+            - All data (library, settings, AI keys) stays local on your machine.

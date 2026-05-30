@@ -11,15 +11,25 @@
     "dev": "pnpm --filter @reader/shared build && pnpm -r --parallel --filter \"./apps/*\" dev",
     "lint": "pnpm -r lint",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
-    "prepare": "husky || true"
+    "prepare": "husky || true",
+    "desktop:dev": "pnpm --filter @reader/shared build && pnpm --filter @reader/desktop build && concurrently -k -n api,web,electron -c blue,green,magenta \"pnpm --filter @reader/api dev\" \"pnpm --filter @reader/web dev\" \"wait-on tcp:3000 http://127.0.0.1:4317/api/books && cross-env ELECTRON_DEV=1 electron apps/desktop\"",
+    "desktop:build": "pnpm --filter @reader/shared build && pnpm --filter @reader/api build && pnpm --filter @reader/web build && pnpm --filter @reader/desktop build",
+    "desktop:dist": "pnpm run desktop:build && pnpm --filter @reader/desktop dist"
   },
   "devDependencies": {
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
     "husky": "^9.1.7",
+    "wait-on": "^8.0.2",
     "lint-staged": "^15.5.0",
     "prettier": "^3.5.3"
   },
   "lint-staged": {
-    "*.{ts,tsx,js,jsx}": ["prettier --write"],
-    "*.{json,md,css}": ["prettier --write"]
+    "*.{ts,tsx,js,jsx}": [
+      "prettier --write"
+    ],
+    "*.{json,md,css}": [
+      "prettier --write"
+    ]
   }
 }

@@ -1,11 +1,9 @@
-import { Body, Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
 import { addApiKeySchema, type AddApiKeyDto } from '@reader/shared';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, JwtUser } from '../common/current-user.decorator';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { SettingsService } from './settings.service';
 
-@UseGuards(JwtAuthGuard)
 @Controller('settings/api-keys')
 export class SettingsController {
   constructor(private readonly settings: SettingsService) {}

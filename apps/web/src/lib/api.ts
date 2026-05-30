@@ -1,25 +1,16 @@
 import type {
   AddApiKeyDto,
   ApiKeySummary,
-  AuthResponse,
   BookDetail,
   BookListItem,
-  LoginDto,
-  RegisterDto,
   ReadingProgress,
   SavedTranslation,
   TranslateDto,
   TranslateStreamEvent,
   UpsertProgressDto,
 } from '@reader/shared';
-import { useAuthStore } from './store';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080/api';
-
-function authHeaders(): Record<string, string> {
-  const token = useAuthStore.getState().token;
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4317/api';
 
 export class ApiError extends Error {
   constructor(
@@ -35,14 +26,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     ...init,
     headers: {
       'Content-Type': 'application/json',
-      ...authHeaders(),
       ...(init.headers ?? {}),
     },
   });
 
-  if (res.status === 401) {
-    useAuthStore.getState().logout();
-  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new ApiError(body.message ?? `Request failed (${res.status})`, res.status);
@@ -51,13 +38,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-/* ── Auth ── */
 export const api = {
-  register: (dto: RegisterDto) =>
-    request<AuthResponse>('/auth/register', { method: 'POST', body: JSON.stringify(dto) }),
-  login: (dto: LoginDto) =>
-    request<AuthResponse>('/auth/login', { method: 'POST', body: JSON.stringify(dto) }),
-
   /* ── Books ── */
   listBooks: () => request<BookListItem[]>('/books'),
   getBook: (id: string) => request<BookDetail>(`/books/${id}`),
@@ -67,7 +48,6 @@ export const api = {
     form.append('file', file);
     const res = await fetch(`${API_URL}/books/upload`, {
       method: 'POST',
-      headers: authHeaders(),
       body: form,
     });
     if (!res.ok) {
@@ -77,24 +57,23 @@ export const api = {
     return res.json();
   },
 
-  /** Fetch the raw epub as an ArrayBuffer (auth header attached). */
+  /** Fetch the raw epub as an ArrayBuffer. */
   getBookFile: async (id: string): Promise<ArrayBuffer> => {
-    const res = await fetch(`${API_URL}/books/${id}/file`, { headers: authHeaders() });
+    const res = await fetch(`${API_URL}/books/${id}/file`);
     if (!res.ok) throw new ApiError('Failed to load book file', res.status);
     return res.arrayBuffer();
   },
 
-  /** Fetch a cover image as an object URL (auth header attached). */
+  /** Fetch a cover image as an object URL. */
   getCoverObjectUrl: async (coverUrl: string): Promise<string | null> => {
-    const res = await fetch(`${API_URL}${coverUrl}`, { headers: authHeaders() });
+    const res = await fetch(`${API_URL}${coverUrl}`);
     if (!res.ok) return null;
     const blob = await res.blob();
     return URL.createObjectURL(blob);
   },
 
   /* ── Progress ── */
-  getProgress: (bookId: string) =>
-    request<ReadingProgress | null>(`/progress/${bookId}`),
+  getProgress: (bookId: string) => request<ReadingProgress | null>(`/progress/${bookId}`),
   saveProgress: (dto: UpsertProgressDto) =>
     request<ReadingProgress>('/progress', { method: 'POST', body: JSON.stringify(dto) }),
 
@@ -125,7 +104,7 @@ export async function streamTranslation(
 ): Promise<void> {
   const res = await fetch(`${API_URL}/translate`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(dto),
     signal,
   });
