@@ -2,12 +2,21 @@ packages:
   - "apps/*"
   - "packages/*"
 
+# Skip the pre-`pnpm run` dependency verification. In pnpm 11 it simulates a
+# `--production` install before every script and, in this dev workspace, tries
+# to purge devDependencies from node_modules — aborting in non-interactive
+# shells. Our build/package scripts manage deps explicitly.
+verifyDepsBeforeRun: false
+confirmModulesPurge: false
+
 # Allow native/postinstall build scripts only for trusted deps.
 allowBuilds:
   '@nestjs/core': true
   '@prisma/client': true
   '@prisma/engines': true
   prisma: true
+  electron: true
+  electron-builder: true
   sharp: true
   unrs-resolver: true
   esbuild: true

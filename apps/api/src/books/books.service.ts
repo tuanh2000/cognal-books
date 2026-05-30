@@ -10,8 +10,11 @@ import type { BookDetail, BookListItem, ReadingProgress } from '@reader/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { ParserRegistry } from '../parsers/parser.registry';
 import { ParsedCover } from '../parsers/interfaces/ebook-parser.interface';
+import { getUploadDir } from '../common/paths';
 
-const UPLOAD_DIR = process.env.UPLOAD_DIR ?? join(process.cwd(), 'uploads');
+// Books/covers live under ${READER_DATA_DIR}/uploads (overridable via UPLOAD_DIR).
+// Resolved lazily so it picks up READER_DATA_DIR set during main.ts bootstrap.
+const UPLOAD_DIR = getUploadDir();
 
 const COVER_EXT: Record<string, string> = {
   'image/jpeg': 'jpg',
@@ -127,8 +130,19 @@ export class BooksService {
   }
 
   private toListItem(
-    book: { id: string; title: string; author: string | null; coverPath: string | null; createdAt: Date },
-    progress: { cfi: string; percentage: number; chapterLabel: string | null; updatedAt: Date } | null,
+    book: {
+      id: string;
+      title: string;
+      author: string | null;
+      coverPath: string | null;
+      createdAt: Date;
+    },
+    progress: {
+      cfi: string;
+      percentage: number;
+      chapterLabel: string | null;
+      updatedAt: Date;
+    } | null,
   ): BookListItem {
     return {
       id: book.id,
@@ -150,7 +164,12 @@ export class BooksService {
       createdAt: Date;
       chapters: { id: string; href: string; label: string; order: number }[];
     },
-    progress: { cfi: string; percentage: number; chapterLabel: string | null; updatedAt: Date } | null,
+    progress: {
+      cfi: string;
+      percentage: number;
+      chapterLabel: string | null;
+      updatedAt: Date;
+    } | null,
   ): BookDetail {
     return {
       ...this.toListItem(book, progress),

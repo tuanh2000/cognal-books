@@ -5,7 +5,6 @@ import {
   Post,
   Res,
   UploadedFile,
-  UseGuards,
   UseInterceptors,
   BadRequestException,
 } from '@nestjs/common';
@@ -13,13 +12,11 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import type { Response } from 'express';
 import { createReadStream } from 'fs';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, JwtUser } from '../common/current-user.decorator';
 import { BooksService } from './books.service';
 
 const MAX_UPLOAD_BYTES = Number(process.env.MAX_UPLOAD_MB ?? 50) * 1024 * 1024;
 
-@UseGuards(JwtAuthGuard)
 @Controller('books')
 export class BooksController {
   constructor(private readonly books: BooksService) {}
@@ -53,22 +50,14 @@ export class BooksController {
   }
 
   @Get(':id/file')
-  async file(
-    @CurrentUser() user: JwtUser,
-    @Param('id') id: string,
-    @Res() res: Response,
-  ) {
+  async file(@CurrentUser() user: JwtUser, @Param('id') id: string, @Res() res: Response) {
     const path = await this.books.getFilePath(user.id, id);
     res.setHeader('Content-Type', 'application/epub+zip');
     createReadStream(path).pipe(res);
   }
 
   @Get(':id/cover')
-  async cover(
-    @CurrentUser() user: JwtUser,
-    @Param('id') id: string,
-    @Res() res: Response,
-  ) {
+  async cover(@CurrentUser() user: JwtUser, @Param('id') id: string, @Res() res: Response) {
     const path = await this.books.getCoverPath(user.id, id);
     res.setHeader('Cache-Control', 'private, max-age=86400');
     createReadStream(path).pipe(res);

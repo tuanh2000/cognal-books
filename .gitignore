@@ -37,6 +37,14 @@ coverage/
 # ── Prisma ───────────────────────────────────────────────────
 prisma/migrations/.lock
 
+# ── Local data (SQLite DB + desktop user-data dir) ───────────
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.reader-data/
+.reader-data-test/
+
 # ── Editors ──────────────────────────────────────────────────
 .vscode/
 .idea/

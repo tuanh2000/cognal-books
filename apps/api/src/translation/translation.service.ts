@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'crypto';
 import type { SavedTranslation, TargetLang, Translation } from '@reader/shared';
 import { PrismaService } from '../prisma/prisma.service';
-import { RedisService } from '../redis/redis.service';
 import { buildProviders, TranslationProvider } from './translation-providers';
 
 const LANG_NAMES: Record<TargetLang, string> = { vi: 'Vietnamese' };
@@ -11,8 +10,17 @@ const LANG_NAMES: Record<TargetLang, string> = { vi: 'Vietnamese' };
 // exhaustive list — it's given to the model as examples so it can generalise to
 // any similar technical/software term. Extend with TRANSLATION_KEEP_TERMS.
 const KEEP_TERM_EXAMPLES = [
-  'software', 'hardware', 'microservice', 'framework', 'API', 'database',
-  'frontend', 'backend', 'deploy', 'container', 'cloud',
+  'software',
+  'hardware',
+  'microservice',
+  'framework',
+  'API',
+  'database',
+  'frontend',
+  'backend',
+  'deploy',
+  'container',
+  'cloud',
 ];
 
 function keepTermExamples(): string[] {
@@ -38,10 +46,7 @@ export class TranslationService {
   // different key and spread load across all keys of a provider.
   private readonly rotation = new Map<string, number>();
 
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly redis: RedisService,
-  ) {
+  constructor(private readonly prisma: PrismaService) {
     this.providers = buildProviders();
     if (this.providers.length === 0) {
       this.logger.warn(
@@ -50,7 +55,10 @@ export class TranslationService {
     } else {
       this.logger.log(
         `Translation providers (in fallback order): ${this.providers
-          .map((p) => `${p.name}(${p.model}, ${p.clients.length} key${p.clients.length > 1 ? 's' : ''})`)
+          .map(
+            (p) =>
+              `${p.name}(${p.model}, ${p.clients.length} key${p.clients.length > 1 ? 's' : ''})`,
+          )
           .join(' → ')}`,
       );
     }
@@ -60,33 +68,26 @@ export class TranslationService {
     return createHash('sha256').update(`${text}:${targetLang}`).digest('hex');
   }
 
-  private redisKey(hash: string): string {
-    return `translation:${hash}`;
-  }
-
-  /** Look up a cached translation: Redis first, then Postgres (and warm Redis). */
+  /**
+   * Look up a cached translation in SQLite (the Translation model, keyed by the
+   * unique `hash`). Redis has been removed; the DB is the single cache + source
+   * of truth. Best-effort: a DB error never throws, it just misses the cache.
+   */
   async findCached(hash: string): Promise<Translation | null> {
-    const cached = await this.redis.get(this.redisKey(hash));
-    if (cached) {
-      try {
-        return { ...(JSON.parse(cached) as Translation), cached: true };
-      } catch {
-        /* fall through to db */
-      }
+    try {
+      const row = await this.prisma.translation.findUnique({ where: { hash } });
+      if (!row) return null;
+      return {
+        hash: row.hash,
+        sourceText: row.sourceText,
+        translatedText: row.translatedText,
+        targetLang: row.targetLang as TargetLang,
+        cached: true,
+      };
+    } catch (err) {
+      this.logger.warn(`Translation cache lookup failed: ${(err as Error).message}`);
+      return null;
     }
-
-    const row = await this.prisma.translation.findUnique({ where: { hash } });
-    if (!row) return null;
-
-    const translation: Translation = {
-      hash: row.hash,
-      sourceText: row.sourceText,
-      translatedText: row.translatedText,
-      targetLang: row.targetLang as TargetLang,
-      cached: true,
-    };
-    await this.redis.set(this.redisKey(hash), JSON.stringify(translation));
-    return translation;
   }
 
   /**
@@ -185,12 +186,10 @@ export class TranslationService {
       }
     }
 
-    throw lastError instanceof Error
-      ? lastError
-      : new Error('All translation providers failed');
+    throw lastError instanceof Error ? lastError : new Error('All translation providers failed');
   }
 
-  /** Persist a completed translation to Postgres + Redis. */
+  /** Persist a completed translation to SQLite (best-effort, never throws). */
   async persist(
     hash: string,
     sourceText: string,
@@ -203,8 +202,6 @@ export class TranslationService {
         create: { hash, sourceText, translatedText, targetLang },
         update: { translatedText },
       });
-      const payload: Translation = { hash, sourceText, translatedText, targetLang, cached: true };
-      await this.redis.set(this.redisKey(hash), JSON.stringify(payload));
     } catch (err) {
       this.logger.warn(`Failed to persist translation: ${(err as Error).message}`);
     }
