@@ -5,7 +5,29 @@ Releases are built and published automatically by GitHub Actions
 and attaches it to a public GitHub Release that anyone can download from the
 repo's **Releases** page.
 
-## Cut a release
+## Cut a release (the easy way)
+
+From a clean `main`, run one command:
+
+```bash
+pnpm release 0.3.0     # explicit version
+pnpm release patch     # 0.1.2 -> 0.1.3
+pnpm release minor     # 0.1.2 -> 0.2.0
+pnpm release major     # 0.1.2 -> 1.0.0
+pnpm release 0.3.0 --dry-run   # preview, change nothing
+```
+
+`scripts/release.sh` bumps the version in both `package.json` files, commits
+`release: vX.Y.Z`, pushes `main`, then creates and pushes the tag (which
+triggers the build). It refuses to run unless you're on `main`, the tree is
+clean, you're in sync with `origin/main`, the new version is higher than the
+current one, and the tag doesn't already exist — so it can't produce the
+tag/version mismatch that failed earlier.
+
+The manual steps below are equivalent, for reference / when you can't use the
+script.
+
+## Cut a release (manual)
 
 Releases are cut from the **`main`** branch. The golden rule:
 
