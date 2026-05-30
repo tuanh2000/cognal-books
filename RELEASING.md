@@ -7,21 +7,52 @@ repo's **Releases** page.
 
 ## Cut a release
 
-1. **Bump the version** in `apps/desktop/package.json` (and ideally the root
-   `package.json`) — e.g. `0.1.0` → `0.2.0`. The CI guard fails the build if the
-   tag and `apps/desktop/package.json` version don't match.
-2. **Commit** the version bump.
-3. **Tag and push:**
-   ```bash
-   git tag v0.2.0
-   git push origin v0.2.0
-   ```
-4. Watch the **Actions** tab. On success a Release named `v0.2.0` appears with
-   `AI Reading Assistant-0.2.0-universal.dmg` attached (runs on Apple Silicon
-   and Intel).
+Releases are cut from the **`main`** branch. The golden rule:
 
-> The workflow file must exist in the tagged commit, so always push your branch
-> (including any workflow changes) before tagging.
+> **Bump the version FIRST, commit it, THEN tag.** The tag (`vX.Y.Z`) must equal
+> the version in `apps/desktop/package.json` (`X.Y.Z`) or CI fails at the
+> "Verify tag matches app version" step. Never reuse a version that already
+> shipped.
+
+Example — releasing **0.3.0** (substitute your version):
+
+```bash
+# 0. Be on main and up to date
+git checkout main && git pull origin main
+
+# 1. Bump the version in BOTH apps/desktop/package.json and the root package.json
+#    (this one-liner does both; macOS sed shown)
+sed -i '' 's/"version": "[^"]*"/"version": "0.3.0"/' apps/desktop/package.json package.json
+
+# 2. Commit and push the bump
+git commit -am "release: v0.3.0"
+git push origin main
+
+# 3. Tag and push the tag — THIS is what triggers the release build
+git tag v0.3.0
+git push origin v0.3.0
+```
+
+Then watch the **Actions** tab. On success a Release named `v0.3.0` appears with
+`AI Reading Assistant-0.3.0-universal.dmg` attached (runs on Apple Silicon and
+Intel), and users on older versions get the in-app update notification on their
+next launch.
+
+> The workflow file must exist in the tagged commit, so always push `main`
+> before tagging.
+
+### Fixing a tag/version mismatch
+
+If you already pushed a tag that doesn't match the version (the build fails the
+guard), bump the version on `main` to match, then move the tag:
+
+```bash
+# after committing the correct version bump on main:
+git tag -d v0.3.0                       # delete local tag
+git push origin :refs/tags/v0.3.0       # delete remote tag
+git tag v0.3.0                          # recreate on the bumped commit
+git push origin v0.3.0                  # re-trigger the build
+```
 
 ## Manual / test build
 
