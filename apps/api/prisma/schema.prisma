@@ -3,6 +3,11 @@
 
 generator client {
   provider = "prisma-client-js"
+  // Bundle both macOS query-engine binaries so the universal desktop app runs
+  // on Apple Silicon (darwin-arm64) AND Intel (darwin = x64). `native` covers
+  // whatever arch generates the client (dev / CI host). Prisma loads the
+  // engine matching the running process arch at startup.
+  binaryTargets = ["native", "darwin", "darwin-arm64"]
 }
 
 datasource db {

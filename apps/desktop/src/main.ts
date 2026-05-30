@@ -32,7 +32,7 @@
  *   resources/api so Prisma resolves engine/schema relative to it.
  * ---------------------------------------------------------------------------
  */
-import { app, BrowserWindow, ipcMain, shell, protocol, net } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, protocol, net, Notification } from 'electron';
 import { spawn, ChildProcess } from 'node:child_process';
 import * as http from 'node:http';
 import * as path from 'node:path';
@@ -55,6 +55,17 @@ const API_HOST = '127.0.0.1';
 // handler maps extension-less routes to their .html files.
 const APP_SCHEME = 'app';
 const APP_ORIGIN = 'app://local/';
+
+// Update notifications use GitHub Releases as a zero-cost backend: on launch we
+// ask the public GitHub API for the latest release and, if it's newer than the
+// running version, show a notification that opens the download page. No server
+// to host, and (unlike electron-updater auto-install) no code-signing needed —
+// the user downloads + installs the new DMG manually. See checkForUpdates().
+const GITHUB_REPO = 'tuanh2000/ai-reading-assistant';
+const LATEST_RELEASE_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
+// Delay the check so it never competes with API boot / first paint.
+const UPDATE_CHECK_DELAY_MS = 5_000;
+
 const HEALTH_PATH = '/api/books';
 const HEALTH_TIMEOUT_MS = 30_000;
 const HEALTH_INTERVAL_MS = 400;
@@ -275,6 +286,83 @@ async function waitForApi(): Promise<boolean> {
   return false;
 }
 
+// --- Update notifications (zero-cost, via GitHub Releases) -----------------
+
+/**
+ * Compare two dotted version strings (e.g. "0.2.0" vs "0.1.3"). Returns a
+ * positive number if `a` is newer than `b`, negative if older, 0 if equal.
+ * Any pre-release suffix (e.g. "-beta.1") is ignored — good enough to decide
+ * "is there a newer stable release than what I'm running".
+ */
+function compareVersions(a: string, b: string): number {
+  const parse = (v: string) =>
+    v
+      .replace(/^v/, '')
+      .split('-')[0]
+      .split('.')
+      .map((n) => parseInt(n, 10) || 0);
+  const pa = parse(a);
+  const pb = parse(b);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+/**
+ * Ask GitHub for the latest published release and, if it's newer than the
+ * running version, show a notification that opens the release page when
+ * clicked. Best-effort and silent on any failure (offline, rate-limited, no
+ * releases yet) — a failed update check must never disrupt the app.
+ *
+ * Cost model: GitHub's REST API and release downloads are free for public
+ * repos. One unauthenticated request per launch is far under the 60/hour/IP
+ * limit. There is no server to run.
+ */
+async function checkForUpdates(): Promise<void> {
+  if (isDev) return; // dev builds report version 0.0.0-ish; don't nag.
+  if (!Notification.isSupported()) return;
+
+  try {
+    const res = await net.fetch(LATEST_RELEASE_API, {
+      headers: {
+        // GitHub requires a User-Agent; the API version header is recommended.
+        'User-Agent': 'AI-Reading-Assistant',
+        Accept: 'application/vnd.github+json',
+      },
+    });
+    if (!res.ok) {
+      console.log(`[desktop] update check skipped (HTTP ${res.status})`);
+      return;
+    }
+    const release = (await res.json()) as {
+      tag_name?: string;
+      html_url?: string;
+      name?: string;
+    };
+    const latest = release.tag_name;
+    const current = app.getVersion();
+    if (!latest || compareVersions(latest, current) <= 0) {
+      console.log(`[desktop] up to date (current ${current}, latest ${latest ?? 'n/a'})`);
+      return;
+    }
+
+    console.log(`[desktop] update available: ${current} -> ${latest}`);
+    const downloadUrl = release.html_url ?? `https://github.com/${GITHUB_REPO}/releases/latest`;
+    const notification = new Notification({
+      title: 'Update available',
+      body: `AI Reading Assistant ${latest} is available. Click to download.`,
+    });
+    notification.on('click', () => {
+      void shell.openExternal(downloadUrl);
+    });
+    notification.show();
+  } catch (err) {
+    console.log('[desktop] update check failed (ignored):', (err as Error).message);
+  }
+}
+
 // --- Window ---------------------------------------------------------------
 
 function createWindow(): void {
@@ -339,6 +427,11 @@ async function bootstrap(): Promise<void> {
     console.error('[desktop] proceeding to open window despite unhealthy API');
   }
   createWindow();
+
+  // Best-effort, non-blocking update check a few seconds after launch.
+  setTimeout(() => {
+    void checkForUpdates();
+  }, UPDATE_CHECK_DELAY_MS);
 }
 
 // Must run before app 'ready': make app:// behave like a standard, secure

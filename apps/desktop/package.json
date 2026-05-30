@@ -60,11 +60,12 @@
         {
           "target": "dmg",
           "arch": [
-            "arm64"
+            "universal"
           ]
         }
       ],
-      "identity": null
+      "identity": null,
+      "x64ArchFiles": "*engine-darwin*"
     }
   }
 }

@@ -77,13 +77,21 @@ for (const stray of ['_gen.db', '.reader-data', ...globSync('*.db', { cwd: bundl
   if (existsSync(p)) rmSync(p, { recursive: true, force: true });
 }
 
-// 6. Sanity check.
-const engine = globSync('node_modules/.prisma/client/libquery_engine-*', {
+// 6. Sanity check. The universal DMG ships both macOS engines so it runs on
+// Apple Silicon and Intel — require both (matches schema binaryTargets).
+const engines = globSync('node_modules/.prisma/client/libquery_engine-darwin*', {
   cwd: bundleDir,
-})[0];
-if (!engine) throw new Error('Prisma query engine missing from bundle after generate');
+});
+const hasArm64 = engines.some((e) => e.includes('darwin-arm64'));
+const hasX64 = engines.some((e) => /libquery_engine-darwin\.dylib\.node$/.test(e));
+if (!hasArm64 || !hasX64) {
+  throw new Error(
+    `Prisma macOS query engines incomplete after generate ` +
+      `(arm64=${hasArm64}, x64=${hasX64}). Found: ${engines.join(', ') || 'none'}`,
+  );
+}
 if (!existsSync(join(bundleDir, 'dist', 'main.js')))
   throw new Error('API dist/main.js missing from bundle — build the API first');
 
 console.log(`\n✓ API bundle ready at ${bundleDir}`);
-console.log(`  engine: ${engine}`);
+console.log(`  engines: ${engines.join(', ')}`);
