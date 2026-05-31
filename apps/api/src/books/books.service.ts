@@ -86,7 +86,7 @@ export class BooksService {
       include: { chapters: { orderBy: { order: 'asc' } } },
     });
 
-    return this.toDetail(updated, null);
+    return this.toDetail(updated, null, { isPublic: updated.isPublic, isOwner: true });
   }
 
   async list(userId: string): Promise<BookListItem[]> {
@@ -95,7 +95,31 @@ export class BooksService {
       orderBy: { createdAt: 'desc' },
       include: { progress: { where: { userId } } },
     });
-    return books.map((b) => this.toListItem(b, b.progress[0] ?? null));
+    return books.map((b) =>
+      this.toListItem(b, b.progress[0] ?? null, { isPublic: b.isPublic, isOwner: true }),
+    );
+  }
+
+  /** Books shared publicly by OTHER users (the explore/shared shelf). */
+  async listPublic(userId: string): Promise<BookListItem[]> {
+    const books = await this.prisma.book.findMany({
+      where: { isPublic: true, userId: { not: userId } },
+      orderBy: { createdAt: 'desc' },
+      include: { progress: { where: { userId } }, user: { select: { email: true } } },
+    });
+    return books.map((b) =>
+      this.toListItem(b, b.progress[0] ?? null, {
+        isPublic: true,
+        isOwner: false,
+        ownerEmail: b.user.email,
+      }),
+    );
+  }
+
+  /** Owner-only: share a book publicly or make it private again. */
+  async setPublic(userId: string, bookId: string, isPublic: boolean): Promise<void> {
+    await this.requireOwned(userId, bookId);
+    await this.prisma.book.update({ where: { id: bookId }, data: { isPublic } });
   }
 
   async remove(userId: string, bookId: string): Promise<void> {
@@ -119,16 +143,17 @@ export class BooksService {
       },
     });
     if (!book) throw new NotFoundException('Book not found');
-    if (book.userId !== userId) throw new ForbiddenException();
-    return this.toDetail(book, book.progress[0] ?? null);
+    const isOwner = book.userId === userId;
+    if (!isOwner && !book.isPublic) throw new ForbiddenException();
+    return this.toDetail(book, book.progress[0] ?? null, { isPublic: book.isPublic, isOwner });
   }
 
-  /** Returns the on-disk path + Content-Type of the raw book file (ownership-checked). */
+  /** Returns the on-disk path + Content-Type of the raw book file (owned or public). */
   async getFileLocation(
     userId: string,
     bookId: string,
   ): Promise<{ path: string; mimeType: string }> {
-    const book = await this.requireOwned(userId, bookId);
+    const book = await this.requireReadable(userId, bookId);
     return {
       path: book.filePath,
       mimeType: CONTENT_TYPE[book.format] ?? 'application/octet-stream',
@@ -136,7 +161,7 @@ export class BooksService {
   }
 
   async getCoverPath(userId: string, bookId: string): Promise<string> {
-    const book = await this.requireOwned(userId, bookId);
+    const book = await this.requireReadable(userId, bookId);
     if (!book.coverPath) throw new NotFoundException('No cover');
     return book.coverPath;
   }
@@ -145,6 +170,14 @@ export class BooksService {
     const book = await this.prisma.book.findUnique({ where: { id: bookId } });
     if (!book) throw new NotFoundException('Book not found');
     if (book.userId !== userId) throw new ForbiddenException();
+    return book;
+  }
+
+  /** Allow access when the user owns the book OR it is shared publicly. */
+  private async requireReadable(userId: string, bookId: string) {
+    const book = await this.prisma.book.findUnique({ where: { id: bookId } });
+    if (!book) throw new NotFoundException('Book not found');
+    if (book.userId !== userId && !book.isPublic) throw new ForbiddenException();
     return book;
   }
 
@@ -175,6 +208,7 @@ export class BooksService {
       chapterLabel: string | null;
       updatedAt: Date;
     } | null,
+    meta: { isPublic: boolean; isOwner: boolean; ownerEmail?: string | null },
   ): BookListItem {
     return {
       id: book.id,
@@ -184,6 +218,9 @@ export class BooksService {
       coverUrl: book.coverPath ? `/books/${book.id}/cover` : null,
       createdAt: book.createdAt.toISOString(),
       progress: progress ? this.toProgress(book.id, progress) : null,
+      isPublic: meta.isPublic,
+      isOwner: meta.isOwner,
+      ownerEmail: meta.ownerEmail ?? null,
     };
   }
 
@@ -204,9 +241,10 @@ export class BooksService {
       chapterLabel: string | null;
       updatedAt: Date;
     } | null,
+    meta: { isPublic: boolean; isOwner: boolean; ownerEmail?: string | null },
   ): BookDetail {
     return {
-      ...this.toListItem(book, progress),
+      ...this.toListItem(book, progress, meta),
       language: book.language,
       fileUrl: `/books/${book.id}/file`,
       chapters: book.chapters.map((c) => ({

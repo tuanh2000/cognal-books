@@ -85,8 +85,14 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 export const api = {
   /* ── Books ── */
   listBooks: () => request<BookListItem[]>('/books'),
+  listPublicBooks: () => request<BookListItem[]>('/books/public'),
   getBook: (id: string) => request<BookDetail>(`/books/${id}`),
   deleteBook: (id: string) => request<{ ok: boolean }>(`/books/${id}`, { method: 'DELETE' }),
+  setBookPublic: (id: string, isPublic: boolean) =>
+    request<{ ok: boolean }>(`/books/${id}/public`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isPublic }),
+    }),
 
   uploadBook: async (file: File, cover?: Blob | null): Promise<BookDetail> => {
     const form = new FormData();

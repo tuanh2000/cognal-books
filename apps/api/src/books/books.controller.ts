@@ -1,8 +1,10 @@
 import {
+  Body,
   Controller,
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Res,
   UploadedFiles,
@@ -69,9 +71,26 @@ export class BooksController {
     return this.books.list(user.id);
   }
 
+  // Must be declared before the ':id' route so it isn't captured as an id.
+  @Get('public')
+  listPublic(@CurrentUser() user: JwtUser) {
+    return this.books.listPublic(user.id);
+  }
+
   @Get(':id')
   detail(@CurrentUser() user: JwtUser, @Param('id') id: string) {
     return this.books.getDetail(user.id, id);
+  }
+
+  /** Owner-only: share publicly / make private. Body: { isPublic: boolean }. */
+  @Patch(':id/public')
+  async setPublic(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() body: { isPublic?: boolean },
+  ) {
+    await this.books.setPublic(user.id, id, body?.isPublic !== false);
+    return { ok: true };
   }
 
   @Delete(':id')

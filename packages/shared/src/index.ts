@@ -130,6 +130,12 @@ export interface BookListItem {
   coverUrl: string | null;
   createdAt: string;
   progress: ReadingProgress | null;
+  /** Whether the book is shared publicly (only meaningful to the owner). */
+  isPublic: boolean;
+  /** True when the current user owns this book (false for shared books). */
+  isOwner: boolean;
+  /** For shared books browsed by non-owners: who shared it. Null otherwise. */
+  ownerEmail?: string | null;
 }
 
 export interface BookDetail extends BookListItem {
