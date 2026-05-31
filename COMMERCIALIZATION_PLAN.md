@@ -115,6 +115,13 @@ _Low risk, reversible. Do first to make the repo a clean web project._
 
 ---
 
+## CI/CD ☑
+
+- ☑ `.github/workflows/ci.yml` — PR/push: install, prisma generate, `migrate deploy` against a throwaway Postgres, lint, build all packages
+- ☑ `.github/workflows/deploy.yml` — push to `main`/manual: build+push `api`+`web` images to GHCR (web baked with `NEXT_PUBLIC_API_URL` var), then SCP `docker-compose.prod.yml`+nginx to host and SSH `compose pull && up -d` (auto-migrate on API boot)
+- ☑ `docker-compose.prod.yml` — host runs pre-built GHCR images (`IMAGE_BASE`/`IMAGE_TAG`/`HTTP_PORT` overridable); `DEPLOY.md` runbook (GitHub secrets/vars + one-time host setup + TLS note)
+- Required GitHub **secrets:** `SSH_HOST`, `SSH_USER`, `SSH_KEY`, `DEPLOY_PATH`; **variable:** `NEXT_PUBLIC_API_URL` (GHCR uses the built-in `GITHUB_TOKEN`).
+
 ## Status: all phases complete ✅
 
 The product is a deployable multi-user web SaaS. Remaining polish (not blocking):
