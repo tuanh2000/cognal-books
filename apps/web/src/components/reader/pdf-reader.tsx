@@ -4,13 +4,28 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import * as pdfjsLib from 'pdfjs-dist';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
-import { ArrowLeft, Home, Languages, Loader2, Minus, Plus, Sparkles } from 'lucide-react';
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  Columns2,
+  Home,
+  Languages,
+  Loader2,
+  Minus,
+  PanelLeft,
+  Plus,
+  ScrollText,
+  Sparkles,
+} from 'lucide-react';
 import { api } from '@/lib/api';
 import type { ChapterSummary, SavedTranslation } from '@reader/shared';
+import { useReaderPrefs } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { TranslationPanel, type PanelRequest } from './translation-panel';
 import { DiscussPanel, type DiscussRequest } from './discuss-panel';
+import { TocSidebar } from './toc-sidebar';
 import { cn } from '@/lib/utils';
 
 // The worker ships in public/ (copied by scripts/copy-pdf-worker.mjs) and is
@@ -106,6 +121,13 @@ export function PdfReader({ bookId }: { bookId: string }) {
   const activeLocatorRef = useRef<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selectionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const currentPageRef = useRef(1);
+
+  const { readingMode, toggleReadingMode } = useReaderPrefs();
+  const paginated = readingMode === 'paginated';
+  const [tocOpen, setTocOpen] = useState(
+    () => typeof window === 'undefined' || window.innerWidth >= 1024,
+  );
 
   const [loading, setLoading] = useState(true);
   const [numPages, setNumPages] = useState(0);
@@ -364,6 +386,7 @@ export function PdfReader({ bookId }: { bookId: string }) {
     }
     const pct = Math.min(100, ((current - 1 + frac) / numPages) * 100);
     setPercentage(pct);
+    currentPageRef.current = current;
 
     // Chapter label: the last outline entry whose page is at/above the current.
     const idx0 = current - 1;
@@ -435,6 +458,15 @@ export function PdfReader({ bookId }: { bookId: string }) {
   const goToPage = (page0: string) => {
     const wrap = pageWrapsRef.current.get(Number(page0) + 1);
     if (wrap && scrollRef.current) scrollRef.current.scrollTop = wrap.offsetTop;
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) setTocOpen(false);
+  };
+
+  // Page-by-page navigation (used in paginated mode + the side arrows).
+  const goRelPage = (delta: number) => {
+    const target = Math.min(numPages, Math.max(1, currentPageRef.current + delta));
+    const wrap = pageWrapsRef.current.get(target);
+    if (wrap && scrollRef.current)
+      scrollRef.current.scrollTo({ top: wrap.offsetTop, behavior: 'smooth' });
   };
 
   const panelOpen = translateRequest != null;
@@ -442,9 +474,23 @@ export function PdfReader({ bookId }: { bookId: string }) {
   return (
     <div className="relative flex h-screen flex-col overflow-hidden bg-background">
       {/* Top bar */}
-      <header className="flex h-14 shrink-0 items-center justify-between border-b px-3">
-        <div className="flex items-center gap-1">
-          <Button asChild variant="ghost" size="icon" aria-label="Home">
+      <header className="flex h-14 shrink-0 items-center justify-between gap-1 border-b px-2 sm:px-3">
+        <div className="flex items-center gap-0.5 sm:gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Toggle contents"
+            onClick={() => setTocOpen((o) => !o)}
+          >
+            <PanelLeft className="h-5 w-5" />
+          </Button>
+          <Button
+            asChild
+            variant="ghost"
+            size="icon"
+            aria-label="Home"
+            className="hidden sm:inline-flex"
+          >
             <Link href="/">
               <Home className="h-5 w-5" />
             </Link>
@@ -456,9 +502,20 @@ export function PdfReader({ bookId }: { bookId: string }) {
           </Button>
         </div>
 
-        <p className="line-clamp-1 px-2 text-sm text-muted-foreground">{chapterLabel}</p>
+        <p className="line-clamp-1 min-w-0 flex-1 px-1 text-center text-sm text-muted-foreground">
+          {chapterLabel}
+        </p>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5 sm:gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={paginated ? 'Switch to scroll view' : 'Switch to page view'}
+            title={paginated ? 'Page mode' : 'Scroll mode'}
+            onClick={toggleReadingMode}
+          >
+            {paginated ? <Columns2 className="h-5 w-5" /> : <ScrollText className="h-5 w-5" />}
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -480,12 +537,9 @@ export function PdfReader({ bookId }: { bookId: string }) {
       </header>
 
       {/* Body */}
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* Table of contents (PDF outline) */}
-        <aside className="w-72 shrink-0 overflow-y-auto border-r bg-card p-4">
-          <h3 className="mb-3 px-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Contents
-          </h3>
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        {/* Table of contents (PDF outline) — inline on desktop, drawer on mobile */}
+        <TocSidebar open={tocOpen} onClose={() => setTocOpen(false)}>
           {chapters.length === 0 ? (
             <p className="px-2 text-sm text-muted-foreground">No outline in this PDF.</p>
           ) : (
@@ -501,7 +555,7 @@ export function PdfReader({ bookId }: { bookId: string }) {
               ))}
             </nav>
           )}
-        </aside>
+        </TocSidebar>
 
         {/* Reading area */}
         <div className="relative min-h-0 flex-1 overflow-hidden">
@@ -517,9 +571,13 @@ export function PdfReader({ bookId }: { bookId: string }) {
             onMouseUp={onMouseUp}
             // `relative` makes this the offsetParent of the page wrappers, so
             // wrap.offsetTop is measured against scrollTop (progress + restore).
-            className="relative h-full w-full overflow-y-auto bg-muted/40 py-6"
+            // In paginated mode, scroll-snap makes each page snap into view.
+            className={cn(
+              'relative h-full w-full overflow-y-auto bg-muted/40 px-2 py-6 sm:px-0',
+              paginated && 'snap-y snap-mandatory',
+            )}
           >
-            <div className="mx-auto flex w-fit flex-col items-center gap-6">
+            <div className="mx-auto flex w-fit max-w-full flex-col items-center gap-6">
               {Array.from({ length: numPages }, (_, i) => i + 1).map((p) => (
                 <div
                   key={p}
@@ -528,11 +586,37 @@ export function PdfReader({ bookId }: { bookId: string }) {
                     if (el) pageWrapsRef.current.set(p, el);
                     else pageWrapsRef.current.delete(p);
                   }}
-                  className="relative bg-white shadow-md"
+                  className={cn(
+                    'relative max-w-full bg-white shadow-md',
+                    paginated && 'snap-start',
+                  )}
                 />
               ))}
             </div>
           </div>
+
+          {/* Page arrows (paginated mode) */}
+          {paginated && (
+            <>
+              <button
+                onClick={() => goRelPage(-1)}
+                aria-label="Previous page"
+                className="absolute left-0 top-0 z-10 flex h-full w-10 items-center justify-center text-muted-foreground/40 hover:bg-accent/40 hover:text-foreground sm:w-12"
+              >
+                <ChevronLeft className="h-6 w-6" />
+              </button>
+              <button
+                onClick={() => goRelPage(1)}
+                aria-label="Next page"
+                className={cn(
+                  'absolute top-0 z-10 flex h-full w-10 items-center justify-center text-muted-foreground/40 transition-[right] hover:bg-accent/40 hover:text-foreground sm:w-12',
+                  panelOpen ? 'right-0 md:right-[28rem]' : 'right-0',
+                )}
+              >
+                <ChevronRight className="h-6 w-6" />
+              </button>
+            </>
+          )}
 
           {/* Selection popup */}
           {selection && (
