@@ -2,7 +2,8 @@
 
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { BookOpen, Loader2, Settings } from 'lucide-react';
+import { useSession, signOut } from 'next-auth/react';
+import { BarChart3, BookOpen, Loader2, LogOut, Settings } from 'lucide-react';
 import { api } from '@/lib/api';
 import { UploadDropzone } from '@/components/upload-dropzone';
 import { BookCard } from '@/components/book-card';
@@ -10,6 +11,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 
 export default function LibraryPage() {
+  const { data: session } = useSession();
   const { data: books, isLoading } = useQuery({
     queryKey: ['books'],
     queryFn: api.listBooks,
@@ -24,12 +26,27 @@ export default function LibraryPage() {
             <span className="text-xl font-semibold tracking-tight">Cognal</span>
           </div>
           <div className="flex items-center gap-1">
+            {session?.user?.isAdmin && (
+              <Button asChild variant="ghost" size="icon" aria-label="Analytics">
+                <Link href="/admin">
+                  <BarChart3 className="h-5 w-5" />
+                </Link>
+              </Button>
+            )}
             <Button asChild variant="ghost" size="icon" aria-label="Settings">
               <Link href="/settings">
                 <Settings className="h-5 w-5" />
               </Link>
             </Button>
             <ThemeToggle />
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Sign out"
+              onClick={() => signOut({ callbackUrl: '/auth/login' })}
+            >
+              <LogOut className="h-5 w-5" />
+            </Button>
           </div>
         </div>
       </header>

@@ -64,14 +64,17 @@ _Low risk, reversible. Do first to make the repo a clean web project._
 - ☑ Rewrote `apps/api/.env.example` for Postgres/web mode
 - ✅ Verified end-to-end: against a throwaway Postgres 16, migration applied, API booted, `GET /api/books` → `200 []`, local-user row created.
 
-## Phase 2 — Auth.js (Google + email registration) ☐
+## Phase 2 — Auth.js (Google + email registration) ☑
 
-- ☐ Add Auth.js + `@auth/prisma-adapter` in `apps/web`, pointed at the same Postgres
-- ☐ Migrate `User` to Auth.js shape; add `Account`, `Session`, `VerificationToken`; restore `passwordHash` for Credentials; add admin flag derived from `ADMIN_EMAILS`
-- ☐ Providers: Google OAuth + Credentials (email/password registration)
-- ☐ Build `/auth/login` and `/auth/register` pages
-- ☐ Middleware: gate `/library`, `/read`, `/settings` behind a session
-- ☐ Access-token mint route + Auth.js `jwt`/`session` callbacks carrying `userId`
+- ☑ Added `next-auth@5` (beta.31) + `@auth/prisma-adapter`, `@prisma/client`, `bcryptjs`, `jose` in `apps/web` (`lib/prisma.ts` singleton, same Postgres)
+- ☑ Extended `User` (optional `passwordHash`, `emailVerified`, `image`) + added `Account`, `Session`, `VerificationToken`; refreshed the baseline migration (10 tables); admin derived from `ADMIN_EMAILS` (`lib/admin.ts`)
+- ☑ Providers: Google OAuth (`allowDangerousEmailAccountLinking`) + Credentials (email/password); `/api/register` route hashes with bcrypt (cost 12)
+- ☑ `/auth/login` + `/auth/register` pages (Google button + email form), sign-out + admin link in library header, `SessionProvider` in providers
+- ☑ Edge-safe middleware via **split config** (`auth.config.ts` for edge / `auth.ts` with adapter for Node) gating `/library`, `/read`, `/settings`, `/admin`
+- ☑ `GET /api/token` mints a short-lived HS256 access token (`sub`,`email`,`isAdmin`) signed with `API_JWT_SECRET`; `jwt`/`session` callbacks carry `id`+`isAdmin`
+- ☑ Updated `apps/web/.env.example` (`AUTH_SECRET`, `AUTH_GOOGLE_ID/SECRET`, `API_JWT_SECRET`, `ADMIN_EMAILS`, `AUTH_TRUST_HOST`, `DATABASE_URL`)
+- ✅ Verified end-to-end (against Postgres): web build incl. all auth routes + edge middleware; register→CSRF→credentials login→session (`isAdmin:true`)→token mint; minted JWT verifies with shared secret (and rejects a wrong one); password stored as bcrypt `$2b$12$`.
+- ⚠️ Live **Google OAuth** not e2e-tested here (needs real client id/secret + browser redirect); provider is wired per Auth.js v5 conventions.
 
 ## Phase 3 — Wire the API to real users ☐
 

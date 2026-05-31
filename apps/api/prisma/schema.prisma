@@ -15,12 +15,21 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String
-  name         String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String    @id @default(uuid())
+  email         String    @unique
+  // Bcrypt hash for email/password (Credentials) sign-in. Null for users who
+  // only authenticate via an OAuth provider (e.g. Google).
+  passwordHash  String?
+  name          String?
+  // Auth.js standard fields (populated for OAuth users).
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Auth.js relations
+  accounts Account[]
+  sessions Session[]
 
   books             Book[]
   progress          ReadingProgress[]
@@ -28,6 +37,53 @@ model User {
   apiKeys           UserApiKey[]
 
   @@map("users")
+}
+
+// ───────────────────────── Auth.js (NextAuth) models ─────────────────────────
+// Managed by @auth/prisma-adapter. Account holds linked OAuth providers; Session
+// is required by the adapter even though we use the JWT session strategy;
+// VerificationToken backs email verification / magic links if enabled later.
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
 }
 
 // A user's own API key for an AI platform (OpenAI, Anthropic, Gemini, …). The
