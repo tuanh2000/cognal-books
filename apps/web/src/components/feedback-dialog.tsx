@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSession } from 'next-auth/react';
 import { useMutation } from '@tanstack/react-query';
 import { CheckCircle2, Loader2, MessageSquarePlus, X } from 'lucide-react';
@@ -32,13 +33,18 @@ function FeedbackDialog({ onClose }: { onClose: () => void }) {
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Failed to send feedback'),
   });
 
-  return (
+  // Render in a portal on <body> so the overlay isn't trapped by the library
+  // header's `backdrop-blur` (a backdrop-filter creates a containing block for
+  // fixed-positioned descendants, which would clip this modal).
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/40 p-0 sm:items-center sm:p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-t-xl border bg-card p-5 shadow-2xl sm:rounded-xl"
+        className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-t-xl border bg-card p-5 shadow-2xl sm:rounded-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">
@@ -89,6 +95,7 @@ function FeedbackDialog({ onClose }: { onClose: () => void }) {
           </form>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
