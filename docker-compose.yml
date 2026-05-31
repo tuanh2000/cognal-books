@@ -14,18 +14,6 @@ services:
       timeout: 5s
       retries: 10
 
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    command: redis-server --save 60 1 --loglevel warning
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
   api:
     build:
       context: .
@@ -33,12 +21,17 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: ${REDIS_URL}
-      API_PORT: ${API_PORT}
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
-      UPLOAD_DIR: ${UPLOAD_DIR}
-      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB}
+      API_PORT: ${API_PORT:-4000}
+      # Shared with the web app to verify the access token it mints.
+      API_JWT_SECRET: ${API_JWT_SECRET}
+      # Encrypts users' own AI keys at rest.
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY}
+      UPLOAD_DIR: ${UPLOAD_DIR:-/data/uploads}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-50}
+      # Browser origin(s) allowed to call the API (the public nginx origin).
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      # Free-tier cap on shared-key AI usage (0 = unlimited).
+      FREE_DAILY_LIMIT: ${FREE_DAILY_LIMIT:-200}
       TRANSLATION_PROVIDER_ORDER: ${TRANSLATION_PROVIDER_ORDER:-gemini,groq,openrouter,openai}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
@@ -49,13 +42,10 @@ services:
       GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-meta-llama/llama-3.3-70b-instruct:free}
-      CORS_ORIGINS: http://localhost:8080,http://localhost:3000
     volumes:
-      - uploads_data:${UPLOAD_DIR}
+      - uploads_data:${UPLOAD_DIR:-/data/uploads}
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
 
   web:
@@ -63,10 +53,25 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
       args:
+        # Baked into the client bundle at build time (browser-reachable).
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
     restart: unless-stopped
+    environment:
+      # Auth.js (NextAuth) + Prisma adapter run inside the web server.
+      DATABASE_URL: ${DATABASE_URL}
+      AUTH_SECRET: ${AUTH_SECRET}
+      AUTH_URL: ${AUTH_URL}
+      AUTH_TRUST_HOST: 'true'
+      AUTH_GOOGLE_ID: ${AUTH_GOOGLE_ID:-}
+      AUTH_GOOGLE_SECRET: ${AUTH_GOOGLE_SECRET:-}
+      # Signs the access token the API verifies (must match API_JWT_SECRET).
+      API_JWT_SECRET: ${API_JWT_SECRET}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
     depends_on:
-      - api
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_started
 
   nginx:
     image: nginx:1.27-alpine
@@ -81,5 +86,4 @@ services:
 
 volumes:
   postgres_data:
-  redis_data:
   uploads_data:

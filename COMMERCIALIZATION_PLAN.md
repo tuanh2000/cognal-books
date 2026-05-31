@@ -103,9 +103,26 @@ _Low risk, reversible. Do first to make the repo a clean web project._
 - ☑ Settings UI: "Using free Cognal AI" banner explaining the shared Groq + fair-use limit and how to remove it; `FREE_DAILY_LIMIT` + `API_JWT_SECRET` added to `apps/api/.env.example`
 - ✅ Verified: cap hit → SSE limit error; `=0` → no cap (proceeds); normal authed GET still 200 under the user-keyed throttler.
 
-## Phase 6 — Deployment (single VPS, Docker Compose) ☐
+## Phase 6 — Deployment (single VPS, Docker Compose) ☑
 
-- ☐ Rework `docker-compose.yml`: `postgres`, `api`, `web`, `nginx` (Redis optional/removed — translation cache lives in Postgres)
+- ☑ Reworked `docker-compose.yml`: `postgres`, `api`, `web`, `nginx` (Redis removed); full env wiring incl. web runtime auth vars (`DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`, `AUTH_TRUST_HOST`, `AUTH_GOOGLE_*`, `API_JWT_SECRET`, `ADMIN_EMAILS`) and api vars (`API_JWT_SECRET`, `FREE_DAILY_LIMIT`, `CORS_ORIGINS`); dropped Redis from the dev override
+- ☑ API entrypoint already runs `prisma migrate deploy` then boots (Dockerfile CMD)
+- ☑ nginx: routes Next-owned `/api/auth/*`, `/api/register`, `/api/token` → web (before the `/api/ → api` catch-all), SSE-safe, 60M upload limit
+- ☑ Web Dockerfile generates the Prisma client (schema copied into the web package at build); `next.config` sets `outputFileTracingRoot` (monorepo) + `serverExternalPackages` so the Prisma engine ships in the standalone image
+- ☑ Rewrote root `.env.example` (auth + analytics + free-tier vars, Redis removed) and the `README.md` for the new architecture
+- ✅ **Verified the full stack in Docker** (built all images, `docker compose up`): through nginx — `/api/health`+`/api/books`(401)+admin → Nest; `/api/register`+`/api/auth/*`+`/api/token` → web; registered → logged in (`isAdmin:true`) → minted token → `GET /api/books` 200 → admin analytics shows the login+signup events. Prisma works in the web standalone image; migrations ran automatically.
+- ⚠️ Tested on host port 8090 (the separate `ai-reading-assistant` stack occupies 8080/5432 locally); compose is back to `8080`.
+
+---
+
+## Status: all phases complete ✅
+
+The product is a deployable multi-user web SaaS. Remaining polish (not blocking):
+
+- **Google OAuth live test** — needs real `AUTH_GOOGLE_ID/SECRET` + a browser (wired per Auth.js conventions).
+- **Brand icons** — favicon/PWA PNGs still visually say "Lumen"; regenerate.
+- **Optional** `@reader/*` → `@cognal/*` package-scope rename.
+- **Out of scope so far:** Terms/Privacy pages, billing/subscriptions, S3 for uploads (local volume today), email magic-links (needs SMTP).
 - ☐ API entrypoint: `prisma migrate deploy` then start
 - ☐ nginx: serve Next.js standalone + proxy `/api`, preserve SSE, raise upload limit
 - ☐ Update `.env.example`: `DATABASE_URL`, `AUTH_SECRET`, `API_JWT_SECRET`, `GOOGLE_CLIENT_ID/SECRET`, `ADMIN_EMAILS`, `GROQ_API_KEY`, `NEXT_PUBLIC_API_URL`

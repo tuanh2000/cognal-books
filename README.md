@@ -1,22 +1,28 @@
-# Cognal — AI-Assisted EPUB Reader
+# Cognal — AI Reading Assistant
 
-Upload EPUBs, read them in a clean distraction-free reader, highlight any passage,
-and stream a natural Vietnamese translation in real time. Translations are cached
-(Redis + Postgres) so repeated lookups are instant and free.
+A multi-user web app for reading EPUBs and PDFs. Highlight any passage and stream
+a natural translation (Vietnamese / English / Chinese) in real time, or "discuss"
+a passage with an AI reading assistant. Translations are cached in Postgres so
+repeated lookups are instant and free.
 
-> **MVP scope:** `.epub` only. The parser layer is designed so PDF/MOBI/AZW3 can be
-> added later without touching the rest of the codebase.
+Users sign in with Google or email/password. Translation runs on a shared free
+provider (Groq) with a fair-use daily limit; users can add their own API keys to
+remove the limit. An admin-only dashboard shows traffic and usage analytics.
+
+> Cognal is the web/SaaS evolution of the former **Lumen** desktop app. See
+> `COMMERCIALIZATION_PLAN.md` for the migration history and architecture notes.
 
 ---
 
 ## Tech stack
 
-| Layer        | Tech                                                                                                   |
-| ------------ | ------------------------------------------------------------------------------------------------------ |
-| **Frontend** | Next.js (App Router) · TypeScript · TailwindCSS · EPUB.js · Zustand · TanStack Query · shadcn-style UI |
-| **Backend**  | NestJS · TypeScript · Prisma · PostgreSQL · Redis · OpenAI SDK                                         |
-| **Infra**    | Docker · Docker Compose · Nginx (reverse proxy + SSE passthrough)                                      |
-| **Monorepo** | pnpm workspaces (`apps/web`, `apps/api`, `packages/shared`)                                            |
+| Layer        | Tech                                                                                                        |
+| ------------ | ----------------------------------------------------------------------------------------------------------- |
+| **Frontend** | Next.js 15 (App Router) · React 19 · TypeScript · TailwindCSS · EPUB.js · pdf.js · Zustand · TanStack Query |
+| **Auth**     | Auth.js (NextAuth v5) — Google OAuth + email/password (Credentials) · Prisma adapter                        |
+| **Backend**  | NestJS · TypeScript · Prisma · PostgreSQL · OpenAI-compatible provider SDK                                  |
+| **Infra**    | Docker · Docker Compose · Nginx (reverse proxy + SSE passthrough)                                           |
+| **Monorepo** | pnpm workspaces (`apps/web`, `apps/api`, `packages/shared`)                                                 |
 
 ---
 
@@ -25,55 +31,52 @@ and stream a natural Vietnamese translation in real time. Translations are cache
 ```
                          ┌──────────────────────────┐
    Browser  ──HTTP/SSE──▶│         Nginx :8080       │
-                         │  /        → web (Next.js)  │
-                         │  /api/    → api (NestJS)   │  (buffering off → SSE)
+                         │  /api/auth, /api/register, │
+                         │  /api/token   → web        │   (Auth.js + token mint)
+                         │  /api/...     → api        │   (buffering off → SSE)
+                         │  /            → web        │
                          └─────────────┬─────────────┘
                           ┌────────────┴────────────┐
                   ┌───────▼───────┐         ┌────────▼────────┐
                   │   web :3000   │         │    api :4000     │
                   │  Next.js SSR  │         │   NestJS REST    │
-                  └───────────────┘         └───┬─────────┬────┘
-                                                │         │
-                                  ┌─────────────▼──┐  ┌───▼──────────┐
-                                  │  Postgres :5432 │  │  Redis :6379 │
-                                  │  (Prisma)       │  │  (tx cache)  │
-                                  └─────────────────┘  └──────────────┘
-                                  + OpenAI API (streaming translation)
+                  │  + Auth.js    │         │  + AuthGuard     │
+                  └───────┬───────┘         └────────┬─────────┘
+                          │   signed access token     │
+                          └─────────(Bearer)──────────┘
+                                       │
+                              ┌────────▼────────┐
+                              │  Postgres :5432  │   (Prisma — shared by web + api)
+                              └──────────────────┘
+                                       + AI provider APIs (streaming translation)
 ```
 
-### Key decisions
+### Auth bridge
 
-- **`packages/shared`** holds all DTOs as Zod schemas + inferred TypeScript types.
-  The API validates requests against the same schemas the web app uses — one source of truth.
-- **Thin backend for reading.** The API only extracts metadata (title/author/cover/chapters)
-  and stores the raw `.epub`. EPUB.js on the client fetches the file as an `ArrayBuffer`
-  (auth header attached) and renders it — keeping pagination/rendering smooth and local.
-- **Parser extensibility.** `parsers/interfaces/ebook-parser.interface.ts` defines the
-  contract; `parsers/epub/epub.parser.ts` implements it; `ParserRegistry` resolves by
-  extension. Adding PDF later = one new class + one registry line.
-- **Translation caching.** `SHA256(text + ':' + lang)` → check Redis → check Postgres
-  (and warm Redis) → otherwise stream from a provider, then persist to both. Cache hits
-  replay instantly through the same SSE channel.
-- **Multi-provider with fallback.** The translator tries providers in a configured
-  priority order (`TRANSLATION_PROVIDER_ORDER`) and transparently falls back to the
-  next when one fails before streaming any token (quota / auth / rate-limit / network).
-  All providers are OpenAI-compatible, so one client type covers OpenAI, Gemini, Groq,
-  and OpenRouter — enable any by setting its API key. See **Translation providers** below.
-- **Streaming.** `POST /api/translate` responds `text/event-stream`; Nginx disables
-  proxy buffering on `/api/` so tokens reach the browser as they're produced.
+Auth.js owns login/session in the Next.js app (Google + email/password) using the
+Prisma adapter on the shared Postgres. Because the API is a separate service, the
+web app mints a short-lived **HS256 access token** (`sub`=userId, `email`,
+`isAdmin`) from the session at `GET /api/token`, signed with `API_JWT_SECRET`. The
+browser sends it as `Authorization: Bearer` on every API call; the API's
+`AuthGuard` verifies it and resolves the user. `API_JWT_SECRET` must match on both
+services.
+
+> nginx routes the **web-owned** paths (`/api/auth/*`, `/api/register`,
+> `/api/token`) to the Next.js app and everything else under `/api/` to NestJS.
 
 ### Backend modules
 
 ```
-src/
-├── auth/         email+password, bcrypt, JWT (Passport)
+apps/api/src/
+├── analytics/    event logging + admin-only aggregate endpoints
 ├── books/        upload, validation, storage, metadata, file serving
 ├── reader/       reading-progress upsert/fetch
-├── translation/  SHA256 cache + multi-provider SSE streaming (with fallback)
-├── parsers/      EbookParser interface + EpubParser + registry
+├── translation/  SHA256 cache + multi-provider SSE streaming (translate + discuss)
+├── parsers/      EbookParser interface + Epub/Pdf parsers + registry
+├── settings/     per-user encrypted AI provider keys
 ├── prisma/       PrismaService (global)
-├── redis/        RedisService cache wrapper (global)
-└── common/       Zod validation pipe, @CurrentUser decorator
+├── health/       public health check
+└── common/       AuthGuard, AdminGuard, UserThrottlerGuard, @CurrentUser, @Public
 ```
 
 ---
@@ -84,26 +87,31 @@ Requires Docker + Docker Compose.
 
 ```bash
 cp .env.example .env
-#   edit .env and set OPENAI_API_KEY (and a strong JWT_SECRET)
+#   set strong secrets: AUTH_SECRET (openssl rand -base64 32), API_JWT_SECRET,
+#   APP_ENCRYPTION_KEY; set GROQ_API_KEY for free AI; optionally AUTH_GOOGLE_ID/
+#   AUTH_GOOGLE_SECRET for Google sign-in. ADMIN_EMAILS gates /admin.
 
 docker compose up --build
 ```
 
-Then open **http://localhost:8080**. Migrations run automatically on API start.
+Then open **http://localhost:8080**. Migrations run automatically on API start
+(`prisma migrate deploy`).
 
 | Service  | URL / port            |
 | -------- | --------------------- |
 | App      | http://localhost:8080 |
 | API      | proxied at `/api`     |
 | Postgres | internal `5432`       |
-| Redis    | internal `6379`       |
+
+> For Google OAuth, add `http://localhost:8080/api/auth/callback/google` as an
+> authorized redirect URI in the Google Cloud console (use your real domain in
+> production, and set `AUTH_URL` accordingly).
 
 ---
 
 ## Local development (without Docker)
 
-You need local Postgres + Redis running (or just start those two via compose:
-`docker compose up postgres redis`).
+Start Postgres (e.g. `docker compose up postgres`, which publishes `5432`), then:
 
 ```bash
 pnpm install
@@ -111,48 +119,56 @@ pnpm install
 # 1. shared package (built once; consumed by api + web)
 pnpm --filter @reader/shared build
 
-# 2. API
-cp apps/api/.env.example apps/api/.env   # set OPENAI_API_KEY, DATABASE_URL, REDIS_URL
+# 2. API  (http://localhost:4000)
+cp apps/api/.env.example apps/api/.env   # set DATABASE_URL, API_JWT_SECRET, APP_ENCRYPTION_KEY
 pnpm --filter @reader/api exec prisma migrate dev
-pnpm --filter @reader/api dev            # http://localhost:4000
+pnpm --filter @reader/api dev
 
-# 3. Web (new terminal)
-cp apps/web/.env.example apps/web/.env.local   # NEXT_PUBLIC_API_URL=http://localhost:4000/api
-pnpm --filter @reader/web dev            # http://localhost:3000
+# 3. Web  (http://localhost:3000, new terminal)
+cp apps/web/.env.example apps/web/.env.local
+#   set DATABASE_URL, AUTH_SECRET, API_JWT_SECRET (== API), ADMIN_EMAILS,
+#   NEXT_PUBLIC_API_URL=http://localhost:4000/api
+pnpm --filter @reader/web dev
 ```
 
 Or run both apps at once from the repo root: `pnpm dev`.
+
+> In local dev there's no nginx, so no route conflict: the web app is on `:3000`
+> (Auth.js + `/api/token`) and the API is on `:4000`.
 
 ---
 
 ## API reference
 
-| Method | Endpoint                  | Auth | Description                              |
-| ------ | ------------------------- | ---- | ---------------------------------------- |
-| POST   | `/api/auth/register`      | —    | Create account → `{ accessToken, user }` |
-| POST   | `/api/auth/login`         | —    | Log in → `{ accessToken, user }`         |
-| GET    | `/api/auth/me`            | ✓    | Current user                             |
-| POST   | `/api/books/upload`       | ✓    | Multipart `file` (.epub) → `BookDetail`  |
-| GET    | `/api/books`              | ✓    | List user's books (+ progress)           |
-| GET    | `/api/books/:id`          | ✓    | Book detail + chapters                   |
-| GET    | `/api/books/:id/file`     | ✓    | Raw `.epub` stream (for EPUB.js)         |
-| GET    | `/api/books/:id/cover`    | ✓    | Cover image                              |
-| POST   | `/api/translate`          | ✓    | SSE stream of Vietnamese translation     |
-| GET    | `/api/translations/:hash` | ✓    | Cached translation lookup                |
-| POST   | `/api/progress`           | ✓    | Upsert reading progress                  |
-| GET    | `/api/progress/:bookId`   | ✓    | Fetch reading progress                   |
+Authenticated requests use `Authorization: Bearer <accessToken>` (from
+`GET /api/token`). Auth endpoints below are served by the web app.
 
-Authenticated requests use `Authorization: Bearer <accessToken>`.
+| Method          | Endpoint                       | Auth    | Description                              |
+| --------------- | ------------------------------ | ------- | ---------------------------------------- |
+| POST            | `/api/register`                | —       | Email/password sign-up (web)             |
+| \*              | `/api/auth/*`                  | —       | Auth.js (login, callback, session) (web) |
+| GET             | `/api/token`                   | session | Mint an API access token (web)           |
+| GET             | `/api/health`                  | —       | Health check (api)                       |
+| POST            | `/api/books/upload`            | ✓       | Multipart `file` (.epub/.pdf)            |
+| GET             | `/api/books`                   | ✓       | List the user's books (+ progress)       |
+| GET             | `/api/books/:id`               | ✓       | Book detail + chapters                   |
+| GET             | `/api/books/:id/file`          | ✓       | Raw book file (for the reader)           |
+| GET             | `/api/books/:id/cover`         | ✓       | Cover image                              |
+| POST            | `/api/translate`               | ✓       | SSE stream of the translation            |
+| POST            | `/api/discuss`                 | ✓       | SSE stream of a passage discussion       |
+| POST            | `/api/progress`                | ✓       | Upsert reading progress                  |
+| GET             | `/api/progress/:bookId`        | ✓       | Fetch reading progress                   |
+| GET/POST/DELETE | `/api/settings/api-keys`       | ✓       | Manage per-user AI provider keys         |
+| GET             | `/api/admin/analytics/summary` | admin   | Traffic + usage aggregates               |
 
 ---
 
 ## Translation providers
 
 Translation needs at least one provider key. The service tries providers in the
-order given by `TRANSLATION_PROVIDER_ORDER` and **falls back to the next one** if a
-provider fails (out of quota, bad key, rate-limited, network error) before any token
-streams. A provider is enabled only when its key is set — so just add a key to turn
-it on. All endpoints below are OpenAI-compatible.
+order given by `TRANSLATION_PROVIDER_ORDER` and **falls back** to the next when one
+fails (quota / auth / rate-limit / network) before any token streams. A provider is
+enabled only when its key is set. All endpoints are OpenAI-compatible.
 
 | Provider   | Key env              | Free tier?               | Default model                            | Sign up                            |
 | ---------- | -------------------- | ------------------------ | ---------------------------------------- | ---------------------------------- |
@@ -161,46 +177,32 @@ it on. All endpoints below are OpenAI-compatible.
 | OpenRouter | `OPENROUTER_API_KEY` | ✅ free models (`:free`) | `meta-llama/llama-3.3-70b-instruct:free` | https://openrouter.ai/keys         |
 | OpenAI     | `OPENAI_API_KEY`     | ❌ paid (prepaid)        | `gpt-4o-mini`                            | https://platform.openai.com        |
 
-> **Note:** A ChatGPT (chatgpt.com) subscription does **not** fund the OpenAI API — it's
-> billed separately. If you want a free option, use Gemini, Groq, or OpenRouter.
-
-Configuration (in `.env`):
-
-```env
-# Priority order — first listed is tried first, then fall back left→right.
-TRANSLATION_PROVIDER_ORDER=gemini,groq,openrouter,openai
-
-GEMINI_API_KEY=your-gemini-key        # enable Gemini (recommended free option)
-# GROQ_API_KEY=...                     # optional extra fallback
-# OPENROUTER_API_KEY=...               # optional extra fallback
-# OPENAI_API_KEY=...                   # optional paid fallback
-# Each provider also accepts a *_MODEL override and OpenAI accepts OPENAI_BASE_URL.
-```
+**Two tiers of keys.** Shared keys come from the env above (the free Cognal AI —
+set `GROQ_API_KEY`). Each user may also add their own keys in Settings; those are
+encrypted at rest (AES-256-GCM) and take precedence. Users on shared keys are
+capped at `FREE_DAILY_LIMIT` translate+discuss calls per 24h (`0` disables it);
+users with their own keys are never limited.
 
 **Multiple keys per provider.** Any `*_API_KEY` may be a comma-separated list to
-multiply a free tier's rate limit. Requests rotate across the keys (round-robin),
-and on a `429`/error they fall through to the next key, then the next provider:
-
-```env
-GROQ_API_KEY=gsk_key1,gsk_key2,gsk_key3
-```
-
-Resolution order for a request becomes: provider 1 → its keys (rotating) → provider 2 → its keys → …
+multiply a free tier's rate limit (round-robin, with fall-through on `429`).
 
 The UI shows which provider served each translation (a "via gemini" badge), or
-"cached" when it came from Redis/Postgres.
+"cached" when it came from Postgres.
 
 ---
 
 ## Security
 
-- Upload validation: extension + MIME filter, size limit (`MAX_UPLOAD_MB`), and a
-  structural ZIP/EPUB signature check before parsing.
-- Request validation: every body is parsed through a Zod schema (`ZodValidationPipe`).
-- Auth: bcrypt password hashing, JWT bearer tokens, route guards; books/progress are
-  scoped to the owning user.
-- Rate limiting: global throttler (120 req/min/IP).
-- Secrets via environment variables; `.env` is git-ignored.
+- **Auth:** Auth.js sessions (Google + bcrypt email/password); the API verifies a
+  signed access token on every request via a global `AuthGuard`; books/progress/keys
+  are scoped to the owning user. Admin routes require an `ADMIN_EMAILS` match.
+- **Rate limiting:** per-user throttler (keyed on the token subject, not IP) +
+  the free-tier daily AI cap.
+- **Upload validation:** extension + MIME filter, size limit (`MAX_UPLOAD_MB`), and
+  a structural ZIP/EPUB signature check before parsing.
+- **Request validation:** every body is parsed through a Zod schema.
+- **Secrets** via environment variables; `.env` is git-ignored. User AI keys are
+  encrypted with `APP_ENCRYPTION_KEY`.
 
 ---
 
@@ -210,20 +212,21 @@ The UI shows which provider served each translation (a "via gemini" badge), or
 .
 ├── apps/
 │   ├── api/            NestJS backend (+ Prisma schema, Dockerfile)
-│   └── web/            Next.js frontend (App Router, Dockerfile)
+│   └── web/            Next.js frontend + Auth.js (App Router, Dockerfile)
 ├── packages/
 │   └── shared/         Zod DTOs + shared TypeScript types
-├── nginx/nginx.conf    Reverse proxy (+ SSE passthrough)
+├── nginx/nginx.conf    Reverse proxy (route split + SSE passthrough)
 ├── docker-compose.yml
+├── COMMERCIALIZATION_PLAN.md
 └── .env.example
 ```
 
 ---
 
-## Adding a new format later (e.g. PDF)
+## Adding a new format later
 
-1. `apps/api/src/parsers/pdf/pdf.parser.ts` implementing `EbookParser`
-   (`extensions = ['pdf']`, `validate`, `parse`).
+1. `apps/api/src/parsers/<fmt>/<fmt>.parser.ts` implementing `EbookParser`
+   (`extensions`, `validate`, `parse`).
 2. Register it in `ParserRegistry`'s constructor.
 
 No controller, service, schema, or frontend change required for ingestion.
