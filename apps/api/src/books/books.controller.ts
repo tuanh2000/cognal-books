@@ -108,7 +108,7 @@ export class BooksController {
 
   @Get(':id/cover')
   async cover(@CurrentUser() user: JwtUser, @Param('id') id: string, @Res() res: Response) {
-    const path = await this.books.getCoverPath(user.id, id);
+    const path = await this.books.getCoverPath(user.id, id, user.isAdmin);
     res.setHeader('Cache-Control', 'private, max-age=86400');
     createReadStream(path).pipe(res);
   }

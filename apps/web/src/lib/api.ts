@@ -152,6 +152,20 @@ export const api = {
     request<AdminBooksResponse>(`/admin/analytics/books?limit=${limit}&offset=${offset}`),
   adminDeleteBook: (id: string) =>
     request<{ ok: boolean }>(`/admin/books/${id}`, { method: 'DELETE' }),
+  adminSetBookCover: async (id: string, image: File): Promise<{ ok: boolean }> => {
+    const form = new FormData();
+    form.append('cover', image);
+    const res = await fetch(`${API_URL}/admin/books/${id}/cover`, {
+      method: 'POST',
+      headers: await authHeaders(),
+      body: form,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(body.message ?? 'Failed to set cover', res.status);
+    }
+    return res.json();
+  },
 
   /* ── Feedback ── */
   submitFeedback: (message: string) =>

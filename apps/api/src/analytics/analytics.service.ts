@@ -105,7 +105,9 @@ export class AnalyticsService {
           author: true,
           format: true,
           fileSize: true,
+          coverPath: true,
           createdAt: true,
+          updatedAt: true,
           user: { select: { email: true, name: true } },
         },
       }),
@@ -119,6 +121,8 @@ export class AnalyticsService {
       format: b.format as BookFormat,
       fileSize: b.fileSize,
       createdAt: b.createdAt.toISOString(),
+      // Versioned by updatedAt so a freshly-set cover busts the browser cache.
+      coverUrl: b.coverPath ? `/books/${b.id}/cover?v=${b.updatedAt.getTime()}` : null,
       ownerEmail: b.user.email,
       ownerName: b.user.name,
     }));

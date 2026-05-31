@@ -1,19 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   BarChart3,
+  BookOpen,
   Check,
   ChevronLeft,
   ChevronRight,
+  ImagePlus,
   Loader2,
   RotateCcw,
   Trash2,
 } from 'lucide-react';
-import type { AnalyticsSummary } from '@reader/shared';
+import type { AdminBookRow, AnalyticsSummary } from '@reader/shared';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -181,10 +183,75 @@ function fmtBytes(bytes: number): string {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
+function BookCoverCell({ book, onChanged }: { book: AdminBookRow; onChanged: () => void }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let revoked: string | null = null;
+    setUrl(null);
+    if (book.coverUrl) {
+      api.getCoverObjectUrl(book.coverUrl).then((u) => {
+        if (u) {
+          revoked = u;
+          setUrl(u);
+        }
+      });
+    }
+    return () => {
+      if (revoked) URL.revokeObjectURL(revoked);
+    };
+  }, [book.coverUrl]);
+
+  const upload = useMutation({
+    mutationFn: (file: File) => api.adminSetBookCover(book.id, file),
+    onSuccess: onChanged,
+  });
+
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        title="Set cover image"
+        className="group relative h-14 w-10 shrink-0 overflow-hidden rounded border bg-muted"
+      >
+        {url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={url} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <span className="flex h-full w-full items-center justify-center text-muted-foreground">
+            <BookOpen className="h-4 w-4" />
+          </span>
+        )}
+        <span className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+          {upload.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin text-white" />
+          ) : (
+            <ImagePlus className="h-4 w-4 text-white" />
+          )}
+        </span>
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) upload.mutate(file);
+          e.target.value = '';
+        }}
+      />
+    </div>
+  );
+}
+
 function BooksTable() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const invalidateBooks = () => queryClient.invalidateQueries({ queryKey: ['admin-books'] });
   const { data, isLoading, isError } = useQuery({
     queryKey: ['admin-books', page],
     queryFn: () => api.getAdminBooks(USERS_PAGE_SIZE, page * USERS_PAGE_SIZE),
@@ -250,6 +317,7 @@ function BooksTable() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-xs uppercase text-muted-foreground">
+                  <th className="px-2 py-2 font-medium">Cover</th>
                   <th className="px-2 py-2 font-medium">Title</th>
                   <th className="px-2 py-2 font-medium">Author</th>
                   <th className="px-2 py-2 font-medium">Format</th>
@@ -262,6 +330,9 @@ function BooksTable() {
               <tbody>
                 {data.books.map((b) => (
                   <tr key={b.id} className="border-b last:border-0">
+                    <td className="px-2 py-2">
+                      <BookCoverCell book={b} onChanged={invalidateBooks} />
+                    </td>
                     <td className="px-2 py-2">{b.title}</td>
                     <td className="px-2 py-2 text-muted-foreground">{b.author ?? '—'}</td>
                     <td className="px-2 py-2">
