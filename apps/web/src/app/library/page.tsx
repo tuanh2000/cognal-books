@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { UploadDropzone } from '@/components/upload-dropzone';
 import { BookCard } from '@/components/book-card';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui/button';
 
 export default function LibraryPage() {
@@ -22,7 +23,7 @@ export default function LibraryPage() {
       <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur">
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center gap-2 text-primary">
-            <BookOpen className="h-6 w-6" />
+            <Logo className="h-7 w-7" />
             <span className="text-xl font-semibold tracking-tight">Cognal</span>
           </div>
           <div className="flex items-center gap-1">
