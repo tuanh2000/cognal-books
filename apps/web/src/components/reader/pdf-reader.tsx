@@ -145,6 +145,7 @@ export function PdfReader({ bookId }: { bookId: string }) {
             text: mark.sourceText,
             cfiRange: mark.cfiRange,
             preloaded: mark.translatedText,
+            lang: mark.targetLang,
           });
         };
         hl.appendChild(div);

@@ -1,6 +1,6 @@
 {
   "name": "@reader/desktop",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "private": true,
   "description": "Electron shell for the AI Reading Assistant (local-only macOS desktop app).",
   "main": "dist/main.js",

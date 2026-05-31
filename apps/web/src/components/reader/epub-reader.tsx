@@ -16,7 +16,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { api } from '@/lib/api';
-import type { SavedTranslation } from '@reader/shared';
+import type { SavedTranslation, TargetLang } from '@reader/shared';
 import { useReaderPrefs } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -76,7 +76,9 @@ export function EpubReader({ bookId }: { bookId: string }) {
   // Authoritative saved marks for this book (with ids), used for overlap checks.
   const savedMarksRef = useRef<SavedTranslation[]>([]);
   // Drawn-highlight cfi -> displayed text (covers merged "union" cfis too).
-  const marksRef = useRef<Map<string, { sourceText: string; translatedText: string }>>(new Map());
+  const marksRef = useRef<
+    Map<string, { sourceText: string; translatedText: string; targetLang?: TargetLang }>
+  >(new Map());
   const highlightedRef = useRef<Set<string>>(new Set());
   // cfi -> EPUB.js Annotation object (so we can toggle the active class on it).
   const annotationsRef = useRef<Map<string, any>>(new Map());
@@ -111,6 +113,7 @@ export function EpubReader({ bookId }: { bookId: string }) {
             text: m?.sourceText ?? '',
             cfiRange,
             preloaded: m?.translatedText ?? '',
+            lang: m?.targetLang,
           });
         },
         'translated-hl',
@@ -149,6 +152,7 @@ export function EpubReader({ bookId }: { bookId: string }) {
         marksRef.current.set(m.cfiRange, {
           sourceText: m.sourceText,
           translatedText: m.translatedText,
+          targetLang: m.targetLang,
         });
         addHighlight(rendition, m.cfiRange);
       }

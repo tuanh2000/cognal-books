@@ -3,9 +3,16 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, KeyRound, Loader2, Plus, Trash2 } from 'lucide-react';
-import { AI_PROVIDERS, AI_PROVIDER_INFO, type AiProvider } from '@reader/shared';
+import { ArrowLeft, KeyRound, Languages, Loader2, Plus, Trash2 } from 'lucide-react';
+import {
+  AI_PROVIDERS,
+  AI_PROVIDER_INFO,
+  SUPPORTED_TARGET_LANGS,
+  TARGET_LANG_LABELS,
+  type AiProvider,
+} from '@reader/shared';
 import { api, ApiError } from '@/lib/api';
+import { useReaderPrefs } from '@/lib/store';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,6 +51,9 @@ export default function SettingsPage() {
 
   const info = AI_PROVIDER_INFO[provider];
 
+  const targetLang = useReaderPrefs((s) => s.targetLang);
+  const setTargetLang = useReaderPrefs((s) => s.setTargetLang);
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur">
@@ -61,6 +71,36 @@ export default function SettingsPage() {
       </header>
 
       <main className="container max-w-2xl py-8">
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Languages className="h-5 w-5" /> Language
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              The language used for AI translation and discussion replies.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1.5">
+              <Label htmlFor="targetLang">Translate &amp; discuss in</Label>
+              <select
+                id="targetLang"
+                value={targetLang}
+                onChange={(e) =>
+                  setTargetLang(e.target.value as (typeof SUPPORTED_TARGET_LANGS)[number])
+                }
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {SUPPORTED_TARGET_LANGS.map((lang) => (
+                  <option key={lang} value={lang}>
+                    {TARGET_LANG_LABELS[lang]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

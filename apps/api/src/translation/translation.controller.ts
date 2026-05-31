@@ -117,6 +117,7 @@ export class TranslationController {
         dto.text,
         dto.messages,
         { title: book.title, author: book.author, language: book.language },
+        dto.targetLang,
         meta,
         userProviders,
       )) {

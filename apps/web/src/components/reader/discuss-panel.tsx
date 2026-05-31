@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Sparkles, Loader2, X, Send, Bot, User } from 'lucide-react';
+import type { TargetLang } from '@reader/shared';
 import { streamDiscuss } from '@/lib/api';
+import { useReaderPrefs } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -22,8 +24,12 @@ interface Msg {
   content: string;
 }
 
-// Vietnamese first turn: ask the model to summarise the selected passage.
-const SUMMARY_PROMPT = 'Hãy tóm tắt những nội dung chính được thảo luận trong đoạn này.';
+// First turn: ask the model (in the reader's language) to summarise the passage.
+const SUMMARY_PROMPTS: Record<TargetLang, string> = {
+  vi: 'Hãy tóm tắt những nội dung chính được thảo luận trong đoạn này.',
+  en: 'Summarize the key points discussed in this passage.',
+  zh: '请总结这段文字讨论的主要内容。',
+};
 
 /**
  * Side panel that discusses a selected passage with the AI: it opens by
@@ -32,6 +38,7 @@ const SUMMARY_PROMPT = 'Hãy tóm tắt những nội dung chính được thả
  * conversation is ephemeral — it resets each time a new passage is opened.
  */
 export function DiscussPanel({ request, bookId, onClose }: Props) {
+  const targetLang = useReaderPrefs((s) => s.targetLang);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [draft, setDraft] = useState('');
   const [streaming, setStreaming] = useState(false);
@@ -56,7 +63,7 @@ export function DiscussPanel({ request, bookId, onClose }: Props) {
       setMessages([...history, { role: 'assistant', content: '' }]);
 
       streamDiscuss(
-        { bookId, text: request.text, cfiRange: request.cfiRange, messages: history },
+        { bookId, text: request.text, cfiRange: request.cfiRange, messages: history, targetLang },
         {
           onToken: (value) =>
             setMessages((prev) => {
@@ -86,14 +93,14 @@ export function DiscussPanel({ request, bookId, onClose }: Props) {
         controller.signal,
       );
     },
-    [request, bookId],
+    [request, bookId, targetLang],
   );
 
   // On (re)open with a new passage: reset and kick off the auto-summary.
   useEffect(() => {
     if (!request) return;
     setDraft('');
-    send([{ role: 'user', content: SUMMARY_PROMPT }]);
+    send([{ role: 'user', content: SUMMARY_PROMPTS[targetLang] }]);
     return () => abortRef.current?.abort();
     // `send` only depends on the passage + bookId, so this re-runs per passage.
   }, [request, send]);

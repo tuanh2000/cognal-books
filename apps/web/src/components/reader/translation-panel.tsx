@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Languages, Loader2, X, Database, Bookmark, RefreshCw, Sparkles } from 'lucide-react';
+import { TARGET_LANG_LABELS, type TargetLang } from '@reader/shared';
 import { streamTranslation } from '@/lib/api';
+import { useReaderPrefs } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -11,6 +13,8 @@ export interface PanelRequest {
   cfiRange?: string;
   /** When set, show this saved translation immediately (no AI call). */
   preloaded?: string;
+  /** Language of a preloaded saved translation (for the header label). */
+  lang?: TargetLang;
 }
 
 interface Props {
@@ -25,6 +29,7 @@ interface Props {
 
 /** Side panel: streams a translation, or shows a saved one with a re-translate button. */
 export function TranslationPanel({ request, bookId, onClose, onTranslated, onDiscuss }: Props) {
+  const targetLang = useReaderPrefs((s) => s.targetLang);
   const [output, setOutput] = useState('');
   const [loading, setLoading] = useState(false);
   const [cached, setCached] = useState(false);
@@ -48,7 +53,7 @@ export function TranslationPanel({ request, bookId, onClose, onTranslated, onDis
       setLoading(true);
 
       streamTranslation(
-        { text: request.text, targetLang: 'vi', bookId, cfiRange: request.cfiRange, force },
+        { text: request.text, targetLang, bookId, cfiRange: request.cfiRange, force },
         {
           onMeta: (isCached) => setCached(isCached),
           onToken: (value) => setOutput((prev) => prev + value),
@@ -65,7 +70,7 @@ export function TranslationPanel({ request, bookId, onClose, onTranslated, onDis
         controller.signal,
       );
     },
-    [request, bookId, onTranslated],
+    [request, bookId, onTranslated, targetLang],
   );
 
   useEffect(() => {
@@ -97,7 +102,7 @@ export function TranslationPanel({ request, bookId, onClose, onTranslated, onDis
       <div className="flex items-center justify-between border-b px-5 py-4">
         <div className="flex items-center gap-2">
           <Languages className="h-5 w-5 text-primary" />
-          <h2 className="font-semibold">Vietnamese</h2>
+          <h2 className="font-semibold">{TARGET_LANG_LABELS[request?.lang ?? targetLang]}</h2>
           {saved ? (
             <span className="flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs text-muted-foreground">
               <Bookmark className="h-3 w-3" /> saved

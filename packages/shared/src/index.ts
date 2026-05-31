@@ -80,8 +80,15 @@ export interface ReadingProgress {
 
 /* ─────────────────────────  Translation  ───────────────────── */
 
-export const SUPPORTED_TARGET_LANGS = ['vi'] as const;
+export const SUPPORTED_TARGET_LANGS = ['vi', 'en', 'zh'] as const;
 export type TargetLang = (typeof SUPPORTED_TARGET_LANGS)[number];
+
+/** Human-readable names for each target language (UI + AI prompts). */
+export const TARGET_LANG_LABELS: Record<TargetLang, string> = {
+  vi: 'Vietnamese',
+  en: 'English',
+  zh: 'Chinese',
+};
 
 export const translateSchema = z.object({
   text: z.string().min(1).max(5000),
@@ -147,6 +154,8 @@ export const discussSchema = z.object({
   cfiRange: z.string().max(2000).optional(),
   // The Q&A so far. The first message is typically an auto "summarise" prompt.
   messages: z.array(discussMessageSchema).min(1).max(40),
+  // Language the assistant should reply in (defaults to Vietnamese).
+  targetLang: z.enum(SUPPORTED_TARGET_LANGS).default('vi'),
 });
 export type DiscussDto = z.infer<typeof discussSchema>;
 

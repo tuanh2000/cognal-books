@@ -1,10 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'crypto';
-import type { SavedTranslation, TargetLang, Translation } from '@reader/shared';
+import {
+  TARGET_LANG_LABELS,
+  type SavedTranslation,
+  type TargetLang,
+  type Translation,
+} from '@reader/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { buildProviders, TranslationProvider } from './translation-providers';
 
-const LANG_NAMES: Record<TargetLang, string> = { vi: 'Vietnamese' };
+const LANG_NAMES = TARGET_LANG_LABELS;
 
 // A SMALL, illustrative sample of words to keep in English. This is NOT an
 // exhaustive list — it's given to the model as examples so it can generalise to
@@ -236,6 +241,7 @@ export class TranslationService {
     passage: string,
     conversation: { role: 'user' | 'assistant'; content: string }[],
     bookContext: { title: string; author?: string | null; language?: string | null },
+    targetLang: TargetLang,
     meta?: { provider?: string },
     providersOverride?: TranslationProvider[],
   ): AsyncGenerator<string> {
@@ -249,6 +255,7 @@ export class TranslationService {
     }
 
     const author = bookContext.author ? ` by ${bookContext.author}` : '';
+    const langName = LANG_NAMES[targetLang];
     const system = [
       'You are a knowledgeable reading assistant. You help a reader understand a passage',
       'from a book they are reading. Use the book and passage below as your primary context.',
@@ -263,7 +270,7 @@ export class TranslationService {
       'Your reader is an experienced software developer with broad computer-science knowledge.',
       '',
       'Guidelines:',
-      '- Always reply in Vietnamese, in clear and natural prose.',
+      `- Always reply in ${langName}, in clear and natural prose.`,
       '- Ground your answer in the passage. You may add relevant background knowledge,',
       '  but do not invent specific facts about the book that the passage does not support.',
       '- Keep technical and software/IT terms, product names, and proper nouns in English.',
@@ -313,7 +320,9 @@ export class TranslationService {
       await this.prisma.savedTranslation.upsert({
         where: { userId_bookId_cfiRange: { userId, bookId, cfiRange } },
         create: { userId, bookId, cfiRange, sourceText, translatedText, targetLang },
-        update: { translatedText, sourceText },
+        // Re-translating the same location (possibly in a new language) replaces
+        // the stored text and its language.
+        update: { translatedText, sourceText, targetLang },
       });
     } catch (err) {
       this.logger.warn(`Failed to save translation mark: ${(err as Error).message}`);
