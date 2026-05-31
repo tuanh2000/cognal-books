@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import { Loader2 } from 'lucide-react';
 import { Logo } from '@/components/logo';
+import { GoogleIcon } from '@/components/google-icon';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -67,6 +68,7 @@ export default function RegisterPage() {
             className="w-full"
             onClick={() => signIn('google', { callbackUrl: '/library' })}
           >
+            <GoogleIcon className="mr-2 h-4 w-4" />
             Continue with Google
           </Button>
 

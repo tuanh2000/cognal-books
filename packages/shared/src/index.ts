@@ -47,6 +47,24 @@ export interface AnalyticsSummary {
   daily: AnalyticsDailyPoint[];
 }
 
+export type SignupMethod = 'google' | 'email';
+
+export interface AdminUserRow {
+  id: string;
+  email: string;
+  name: string | null;
+  createdAt: string;
+  lastActive: string | null;
+  signupMethods: SignupMethod[];
+}
+
+export interface AdminUsersResponse {
+  total: number;
+  limit: number;
+  offset: number;
+  users: AdminUserRow[];
+}
+
 /* ──────────────────────────  Books  ────────────────────────── */
 
 /** Source format of a book. Drives which reader the frontend mounts. */

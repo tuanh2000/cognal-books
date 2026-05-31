@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { AnalyticsSummary } from '@reader/shared';
+import type { AdminUsersResponse, AnalyticsSummary, SignupMethod } from '@reader/shared';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type AnalyticsEventType = 'login' | 'signup' | 'upload' | 'translate' | 'discuss';
@@ -25,6 +25,56 @@ export class AnalyticsService {
         },
       })
       .catch((err) => this.logger.warn(`Failed to log analytics event "${type}": ${err.message}`));
+  }
+
+  /** Paginated user list for the admin dashboard, with signup method + last-active. */
+  async listUsers(limit: number, offset: number): Promise<AdminUsersResponse> {
+    const take = Math.min(Math.max(Math.trunc(limit) || 50, 1), 200);
+    const skip = Math.max(Math.trunc(offset) || 0, 0);
+
+    const [rows, total] = await Promise.all([
+      this.prisma.$queryRaw<
+        {
+          id: string;
+          email: string;
+          name: string | null;
+          createdAt: Date;
+          has_password: boolean;
+          has_google: boolean;
+          last_active: Date | null;
+        }[]
+      >`
+        SELECT u.id, u.email, u.name, u."createdAt",
+               (u."passwordHash" IS NOT NULL) AS has_password,
+               EXISTS(
+                 SELECT 1 FROM accounts a
+                 WHERE a."userId" = u.id AND a.provider = 'google'
+               ) AS has_google,
+               (
+                 SELECT MAX(e."createdAt") FROM analytics_events e
+                 WHERE e."userId" = u.id
+               ) AS last_active
+        FROM users u
+        ORDER BY u."createdAt" DESC
+        LIMIT ${take} OFFSET ${skip}`,
+      this.prisma.user.count(),
+    ]);
+
+    const users = rows.map((r) => {
+      const signupMethods: SignupMethod[] = [];
+      if (r.has_google) signupMethods.push('google');
+      if (r.has_password) signupMethods.push('email');
+      return {
+        id: r.id,
+        email: r.email,
+        name: r.name,
+        createdAt: r.createdAt.toISOString(),
+        lastActive: r.last_active ? new Date(r.last_active).toISOString() : null,
+        signupMethods,
+      };
+    });
+
+    return { total, limit: take, offset: skip, users };
   }
 
   /** Count a user's events of the given types since `since` (free-tier metering). */

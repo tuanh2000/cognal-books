@@ -2,14 +2,124 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, BarChart3, Loader2 } from 'lucide-react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { ArrowLeft, BarChart3, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import type { AnalyticsSummary } from '@reader/shared';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const RANGES = [7, 30, 90] as const;
+const USERS_PAGE_SIZE = 25;
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function MethodBadge({ method }: { method: 'google' | 'email' }) {
+  return (
+    <span className="rounded-full border px-2 py-0.5 text-xs capitalize text-muted-foreground">
+      {method}
+    </span>
+  );
+}
+
+function UsersTable() {
+  const [page, setPage] = useState(0);
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['admin-users', page],
+    queryFn: () => api.getUsers(USERS_PAGE_SIZE, page * USERS_PAGE_SIZE),
+    placeholderData: keepPreviousData,
+  });
+
+  const total = data?.total ?? 0;
+  const from = total === 0 ? 0 : page * USERS_PAGE_SIZE + 1;
+  const to = Math.min((page + 1) * USERS_PAGE_SIZE, total);
+  const hasPrev = page > 0;
+  const hasNext = to < total;
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between space-y-0">
+        <CardTitle>
+          Users {total > 0 && <span className="text-muted-foreground">({total})</span>}
+        </CardTitle>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          {total > 0 && (
+            <span>
+              {from}–{to}
+            </span>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled={!hasPrev}
+            onClick={() => setPage((p) => p - 1)}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled={!hasNext}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="flex justify-center py-10">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : isError || !data ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">Failed to load users.</p>
+        ) : data.users.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">No users yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs uppercase text-muted-foreground">
+                  <th className="px-2 py-2 font-medium">Email</th>
+                  <th className="px-2 py-2 font-medium">Name</th>
+                  <th className="px-2 py-2 font-medium">Signup</th>
+                  <th className="px-2 py-2 font-medium">Joined</th>
+                  <th className="px-2 py-2 font-medium">Last active</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.users.map((u) => (
+                  <tr key={u.id} className="border-b last:border-0">
+                    <td className="px-2 py-2">{u.email}</td>
+                    <td className="px-2 py-2 text-muted-foreground">{u.name ?? '—'}</td>
+                    <td className="px-2 py-2">
+                      <div className="flex flex-wrap gap-1">
+                        {u.signupMethods.length === 0 ? (
+                          <span className="text-muted-foreground">—</span>
+                        ) : (
+                          u.signupMethods.map((m) => <MethodBadge key={m} method={m} />)
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-2 py-2 text-muted-foreground">{fmtDate(u.createdAt)}</td>
+                    <td className="px-2 py-2 text-muted-foreground">{fmtDate(u.lastActive)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
@@ -180,6 +290,8 @@ export default function AdminPage() {
                 </CardContent>
               </Card>
             </div>
+
+            <UsersTable />
           </>
         )}
       </main>

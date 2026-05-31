@@ -1,5 +1,6 @@
 import type {
   AddApiKeyDto,
+  AdminUsersResponse,
   AnalyticsSummary,
   ApiKeySummary,
   BookDetail,
@@ -137,6 +138,8 @@ export const api = {
 
   /* ── Admin analytics (admin only) ── */
   getAnalytics: (days = 30) => request<AnalyticsSummary>(`/admin/analytics/summary?days=${days}`),
+  getUsers: (limit = 25, offset = 0) =>
+    request<AdminUsersResponse>(`/admin/analytics/users?limit=${limit}&offset=${offset}`),
 };
 
 /* ── Streaming translation (SSE over POST) ── */

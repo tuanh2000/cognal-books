@@ -12,4 +12,9 @@ export class AnalyticsController {
   summary(@Query('days') days?: string) {
     return this.analytics.summary(days ? Number(days) : 30);
   }
+
+  @Get('users')
+  users(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.analytics.listUsers(limit ? Number(limit) : 50, offset ? Number(offset) : 0);
+  }
 }
