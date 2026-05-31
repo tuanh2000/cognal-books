@@ -17,4 +17,9 @@ export class AnalyticsController {
   users(@Query('limit') limit?: string, @Query('offset') offset?: string) {
     return this.analytics.listUsers(limit ? Number(limit) : 50, offset ? Number(offset) : 0);
   }
+
+  @Get('books')
+  books(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.analytics.listBooks(limit ? Number(limit) : 25, offset ? Number(offset) : 0);
+  }
 }

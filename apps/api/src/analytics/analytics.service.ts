@@ -1,6 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { AdminUsersResponse, AnalyticsSummary, SignupMethod } from '@reader/shared';
+import type {
+  AdminBooksResponse,
+  AdminUsersResponse,
+  AnalyticsSummary,
+  BookFormat,
+  SignupMethod,
+} from '@reader/shared';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type AnalyticsEventType =
@@ -81,6 +87,43 @@ export class AnalyticsService {
     });
 
     return { total, limit: take, offset: skip, users };
+  }
+
+  /** Paginated list of all uploaded books with their owner, for admins. */
+  async listBooks(limit: number, offset: number): Promise<AdminBooksResponse> {
+    const take = Math.min(Math.max(Math.trunc(limit) || 25, 1), 200);
+    const skip = Math.max(Math.trunc(offset) || 0, 0);
+
+    const [rows, total] = await Promise.all([
+      this.prisma.book.findMany({
+        orderBy: { createdAt: 'desc' },
+        take,
+        skip,
+        select: {
+          id: true,
+          title: true,
+          author: true,
+          format: true,
+          fileSize: true,
+          createdAt: true,
+          user: { select: { email: true, name: true } },
+        },
+      }),
+      this.prisma.book.count(),
+    ]);
+
+    const books = rows.map((b) => ({
+      id: b.id,
+      title: b.title,
+      author: b.author,
+      format: b.format as BookFormat,
+      fileSize: b.fileSize,
+      createdAt: b.createdAt.toISOString(),
+      ownerEmail: b.user.email,
+      ownerName: b.user.name,
+    }));
+
+    return { total, limit: take, offset: skip, books };
   }
 
   /** Count a user's events of the given types since `since` (free-tier metering). */
