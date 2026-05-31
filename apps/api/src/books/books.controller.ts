@@ -14,6 +14,7 @@ import { memoryStorage } from 'multer';
 import type { Response } from 'express';
 import { createReadStream } from 'fs';
 import { CurrentUser, JwtUser } from '../common/current-user.decorator';
+import { AnalyticsService } from '../analytics/analytics.service';
 import { BooksService } from './books.service';
 
 const MAX_UPLOAD_BYTES = Number(process.env.MAX_UPLOAD_MB ?? 50) * 1024 * 1024;
@@ -22,7 +23,10 @@ type UploadFields = { file?: Express.Multer.File[]; cover?: Express.Multer.File[
 
 @Controller('books')
 export class BooksController {
-  constructor(private readonly books: BooksService) {}
+  constructor(
+    private readonly books: BooksService,
+    private readonly analytics: AnalyticsService,
+  ) {}
 
   @Post('upload')
   @UseInterceptors(
@@ -52,10 +56,12 @@ export class BooksController {
       },
     ),
   )
-  upload(@CurrentUser() user: JwtUser, @UploadedFiles() files?: UploadFields) {
+  async upload(@CurrentUser() user: JwtUser, @UploadedFiles() files?: UploadFields) {
     const file = files?.file?.[0];
     if (!file) throw new BadRequestException('No file uploaded');
-    return this.books.upload(user.id, file, files?.cover?.[0]);
+    const book = await this.books.upload(user.id, file, files?.cover?.[0]);
+    this.analytics.log('upload', user.id, { bookId: book.id, format: book.format });
+    return book;
   }
 
   @Get()

@@ -71,7 +71,7 @@ export const PROVIDER_DEFS: Record<string, ProviderDef> = {
     baseURL: 'https://openrouter.ai/api/v1',
     defaultModel: 'meta-llama/llama-3.3-70b-instruct:free',
     modelEnv: 'OPENROUTER_MODEL',
-    headers: { 'HTTP-Referer': 'http://localhost:8080', 'X-Title': 'Lumen Reader' },
+    headers: { 'HTTP-Referer': 'http://localhost:8080', 'X-Title': 'Cognal Reader' },
   },
 };
 

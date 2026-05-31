@@ -1,27 +1,35 @@
-// Prisma schema for the AI-assisted EPUB reader.
-// Models: User, Book, Chapter, ReadingProgress, Translation.
+// Prisma schema for Cognal (PostgreSQL).
+// Models: User, UserApiKey, Book, Chapter, ReadingProgress, Translation, SavedTranslation.
 
 generator client {
   provider = "prisma-client-js"
-  // Bundle both macOS query-engine binaries so the universal desktop app runs
-  // on Apple Silicon (darwin-arm64) AND Intel (darwin = x64). `native` covers
-  // whatever arch generates the client (dev / CI host). Prisma loads the
-  // engine matching the running process arch at startup.
-  binaryTargets = ["native", "darwin", "darwin-arm64"]
+  // `native` resolves to the engine for whatever platform runs `prisma generate`
+  // — the dev host locally and the linux container in Docker (generated in the
+  // same image it runs in), so no extra targets are needed for web deployment.
+  binaryTargets = ["native"]
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String
-  name         String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String    @id @default(uuid())
+  email         String    @unique
+  // Bcrypt hash for email/password (Credentials) sign-in. Null for users who
+  // only authenticate via an OAuth provider (e.g. Google).
+  passwordHash  String?
+  name          String?
+  // Auth.js standard fields (populated for OAuth users).
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Auth.js relations
+  accounts Account[]
+  sessions Session[]
 
   books             Book[]
   progress          ReadingProgress[]
@@ -29,6 +37,53 @@ model User {
   apiKeys           UserApiKey[]
 
   @@map("users")
+}
+
+// ───────────────────────── Auth.js (NextAuth) models ─────────────────────────
+// Managed by @auth/prisma-adapter. Account holds linked OAuth providers; Session
+// is required by the adapter even though we use the JWT session strategy;
+// VerificationToken backs email verification / magic links if enabled later.
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
 }
 
 // A user's own API key for an AI platform (OpenAI, Anthropic, Gemini, …). The
@@ -123,6 +178,27 @@ model Translation {
 
   @@index([targetLang])
   @@map("translations")
+}
+
+// Append-only stream of product events for the admin analytics dashboard
+// (daily traffic, active users, feature usage, top AI providers). Intentionally
+// denormalised + decoupled from the user FK (userId is nullable and NOT a
+// relation) so writes are cheap and never block/break a request, and rows
+// survive user deletion for historical aggregates.
+model AnalyticsEvent {
+  id        String   @id @default(uuid())
+  // Null for anonymous events (e.g. a failed login before a user is known).
+  userId    String?
+  // Event type, e.g. "login" | "signup" | "upload" | "translate" | "discuss".
+  type      String
+  // Free-form context, e.g. { provider, targetLang, bookId, format, cached }.
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([type, createdAt])
+  @@index([createdAt])
+  @@index([userId])
+  @@map("analytics_events")
 }
 
 // A translation the user saved against a specific location in a book. Powers

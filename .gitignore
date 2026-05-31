@@ -44,6 +44,7 @@ prisma/migrations/.lock
 *.db-shm
 .reader-data/
 .reader-data-test/
+.local-data/
 
 # ── Editors ──────────────────────────────────────────────────
 .vscode/

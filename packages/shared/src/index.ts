@@ -26,6 +26,27 @@ export interface AuthResponse {
   user: AuthUser;
 }
 
+/* ──────────────────────────  Analytics (admin)  ────────────────────────── */
+
+export interface AnalyticsDailyPoint {
+  date: string; // YYYY-MM-DD
+  translate: number;
+  discuss: number;
+  upload: number;
+  login: number;
+  signup: number;
+  activeUsers: number;
+}
+
+export interface AnalyticsSummary {
+  rangeDays: number;
+  totals: { users: number; books: number; translationsCached: number; events: number };
+  window: { signups: number; activeUsers: number; events: number };
+  eventsByType: { type: string; count: number }[];
+  topProviders: { provider: string; count: number }[];
+  daily: AnalyticsDailyPoint[];
+}
+
 /* ──────────────────────────  Books  ────────────────────────── */
 
 /** Source format of a book. Drives which reader the frontend mounts. */

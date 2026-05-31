@@ -3,7 +3,7 @@ import './globals.css';
 import { Providers } from './providers';
 
 export const metadata: Metadata = {
-  title: 'Lumen — AI Reading Assistant',
+  title: 'Cognal — AI Reading Assistant',
   description: 'Read EPUBs and translate as you go.',
   manifest: '/site.webmanifest',
   icons: {

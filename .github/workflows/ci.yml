@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    # A throwaway Postgres so we can validate that migrations apply cleanly.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: reader
+          POSTGRES_PASSWORD: reader
+          POSTGRES_DB: reader
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U reader -d reader"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://reader:reader@localhost:5432/reader?schema=public
+      # Build-time/dummy values so the web build (Auth.js + Prisma) compiles.
+      NEXT_PUBLIC_API_URL: http://localhost:8080/api
+      AUTH_SECRET: ci-dummy-secret-aaaaaaaaaaaaaaaaaaaaaaaa
+      API_JWT_SECRET: ci-dummy-api-secret
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @reader/shared build
+
+      - name: Generate Prisma client
+        run: pnpm --filter @reader/api exec prisma generate
+
+      - name: Validate migrations apply on a clean DB
+        run: pnpm --filter @reader/api exec prisma migrate deploy
+
+      - name: Lint
+        run: pnpm -r lint
+
+      - name: Build all packages
+        run: pnpm -r build
