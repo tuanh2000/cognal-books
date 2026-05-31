@@ -173,6 +173,108 @@ function MethodBadge({ method }: { method: 'google' | 'email' }) {
   );
 }
 
+function fmtBytes(bytes: number): string {
+  if (!bytes) return '—';
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1) return `${mb.toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+function BooksTable() {
+  const [page, setPage] = useState(0);
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['admin-books', page],
+    queryFn: () => api.getAdminBooks(USERS_PAGE_SIZE, page * USERS_PAGE_SIZE),
+    placeholderData: keepPreviousData,
+  });
+
+  const total = data?.total ?? 0;
+  const from = total === 0 ? 0 : page * USERS_PAGE_SIZE + 1;
+  const to = Math.min((page + 1) * USERS_PAGE_SIZE, total);
+  const hasPrev = page > 0;
+  const hasNext = to < total;
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between space-y-0">
+        <CardTitle>
+          Books {total > 0 && <span className="text-muted-foreground">({total})</span>}
+        </CardTitle>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          {total > 0 && (
+            <span>
+              {from}–{to}
+            </span>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled={!hasPrev}
+            onClick={() => setPage((p) => p - 1)}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled={!hasNext}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="flex justify-center py-10">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : isError || !data ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">Failed to load books.</p>
+        ) : data.books.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">No books uploaded yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs uppercase text-muted-foreground">
+                  <th className="px-2 py-2 font-medium">Title</th>
+                  <th className="px-2 py-2 font-medium">Author</th>
+                  <th className="px-2 py-2 font-medium">Format</th>
+                  <th className="px-2 py-2 font-medium">Size</th>
+                  <th className="px-2 py-2 font-medium">Submitted by</th>
+                  <th className="px-2 py-2 font-medium">Uploaded</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.books.map((b) => (
+                  <tr key={b.id} className="border-b last:border-0">
+                    <td className="px-2 py-2">{b.title}</td>
+                    <td className="px-2 py-2 text-muted-foreground">{b.author ?? '—'}</td>
+                    <td className="px-2 py-2">
+                      <span className="rounded-full border px-2 py-0.5 text-xs uppercase text-muted-foreground">
+                        {b.format}
+                      </span>
+                    </td>
+                    <td className="px-2 py-2 text-muted-foreground">{fmtBytes(b.fileSize)}</td>
+                    <td className="px-2 py-2">
+                      <span className="font-medium">{b.ownerEmail}</span>
+                      {b.ownerName && (
+                        <span className="text-muted-foreground"> ({b.ownerName})</span>
+                      )}
+                    </td>
+                    <td className="px-2 py-2 text-muted-foreground">{fmtDate(b.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function UsersTable() {
   const [page, setPage] = useState(0);
   const { data, isLoading, isError } = useQuery({
@@ -436,6 +538,7 @@ export default function AdminPage() {
             </div>
 
             <FeedbackPanel />
+            <BooksTable />
             <UsersTable />
           </>
         )}

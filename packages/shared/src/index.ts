@@ -65,6 +65,25 @@ export interface AdminUsersResponse {
   users: AdminUserRow[];
 }
 
+export interface AdminBookRow {
+  id: string;
+  title: string;
+  author: string | null;
+  format: BookFormat;
+  fileSize: number;
+  createdAt: string;
+  /** Who uploaded it. */
+  ownerEmail: string;
+  ownerName: string | null;
+}
+
+export interface AdminBooksResponse {
+  total: number;
+  limit: number;
+  offset: number;
+  books: AdminBookRow[];
+}
+
 /* ──────────────────────────  Feedback  ────────────────────────── */
 
 export const submitFeedbackSchema = z.object({

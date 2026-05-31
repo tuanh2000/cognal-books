@@ -1,5 +1,6 @@
 import type {
   AddApiKeyDto,
+  AdminBooksResponse,
   AdminFeedbackResponse,
   AdminUsersResponse,
   AnalyticsSummary,
@@ -141,6 +142,8 @@ export const api = {
   getAnalytics: (days = 30) => request<AnalyticsSummary>(`/admin/analytics/summary?days=${days}`),
   getUsers: (limit = 25, offset = 0) =>
     request<AdminUsersResponse>(`/admin/analytics/users?limit=${limit}&offset=${offset}`),
+  getAdminBooks: (limit = 25, offset = 0) =>
+    request<AdminBooksResponse>(`/admin/analytics/books?limit=${limit}&offset=${offset}`),
 
   /* ── Feedback ── */
   submitFeedback: (message: string) =>
