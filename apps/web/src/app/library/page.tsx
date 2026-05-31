@@ -9,6 +9,7 @@ import { UploadDropzone } from '@/components/upload-dropzone';
 import { BookCard } from '@/components/book-card';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Logo } from '@/components/logo';
+import { FeedbackButton } from '@/components/feedback-dialog';
 import { Button } from '@/components/ui/button';
 
 export default function LibraryPage() {
@@ -34,6 +35,7 @@ export default function LibraryPage() {
                 </Link>
               </Button>
             )}
+            <FeedbackButton />
             <Button asChild variant="ghost" size="icon" aria-label="Settings">
               <Link href="/settings">
                 <Settings className="h-5 w-5" />

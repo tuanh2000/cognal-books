@@ -3,7 +3,13 @@ import { Prisma } from '@prisma/client';
 import type { AdminUsersResponse, AnalyticsSummary, SignupMethod } from '@reader/shared';
 import { PrismaService } from '../prisma/prisma.service';
 
-export type AnalyticsEventType = 'login' | 'signup' | 'upload' | 'translate' | 'discuss';
+export type AnalyticsEventType =
+  | 'login'
+  | 'signup'
+  | 'upload'
+  | 'translate'
+  | 'discuss'
+  | 'feedback';
 
 @Injectable()
 export class AnalyticsService {

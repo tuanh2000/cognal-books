@@ -2,8 +2,16 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { ArrowLeft, BarChart3, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  ArrowLeft,
+  BarChart3,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  RotateCcw,
+} from 'lucide-react';
 import type { AnalyticsSummary } from '@reader/shared';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -11,6 +19,142 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const RANGES = [7, 30, 90] as const;
 const USERS_PAGE_SIZE = 25;
+const FEEDBACK_PAGE_SIZE = 25;
+const FEEDBACK_STATUSES = ['open', 'all', 'resolved'] as const;
+
+function fmtDateTime(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function FeedbackPanel() {
+  const queryClient = useQueryClient();
+  const [status, setStatus] = useState<(typeof FEEDBACK_STATUSES)[number]>('open');
+  const [page, setPage] = useState(0);
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['admin-feedback', status, page],
+    queryFn: () => api.getFeedback(status, FEEDBACK_PAGE_SIZE, page * FEEDBACK_PAGE_SIZE),
+    placeholderData: keepPreviousData,
+  });
+
+  const toggle = useMutation({
+    mutationFn: ({ id, resolved }: { id: string; resolved: boolean }) =>
+      api.setFeedbackResolved(id, resolved),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-feedback'] }),
+  });
+
+  const total = data?.total ?? 0;
+  const to = Math.min((page + 1) * FEEDBACK_PAGE_SIZE, total);
+  const hasPrev = page > 0;
+  const hasNext = to < total;
+
+  return (
+    <Card>
+      <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
+        <CardTitle>
+          Feedback{' '}
+          {data && data.unresolved > 0 && (
+            <span className="rounded-full bg-primary/15 px-2 py-0.5 text-xs text-primary">
+              {data.unresolved} open
+            </span>
+          )}
+        </CardTitle>
+        <div className="flex items-center gap-1">
+          {FEEDBACK_STATUSES.map((s) => (
+            <Button
+              key={s}
+              variant={status === s ? 'default' : 'ghost'}
+              size="sm"
+              className="capitalize"
+              onClick={() => {
+                setStatus(s);
+                setPage(0);
+              }}
+            >
+              {s}
+            </Button>
+          ))}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="flex justify-center py-10">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : isError || !data ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">Failed to load feedback.</p>
+        ) : data.items.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">No feedback here.</p>
+        ) : (
+          <div className="space-y-3">
+            {data.items.map((f) => (
+              <div
+                key={f.id}
+                className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-start sm:justify-between"
+              >
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">{f.email}</span>
+                    <span>{fmtDateTime(f.createdAt)}</span>
+                    {f.resolved && (
+                      <span className="rounded-full bg-secondary px-2 py-0.5 text-muted-foreground">
+                        resolved
+                      </span>
+                    )}
+                  </div>
+                  <p className="whitespace-pre-wrap break-words text-sm">{f.message}</p>
+                </div>
+                <Button
+                  variant={f.resolved ? 'ghost' : 'outline'}
+                  size="sm"
+                  className="shrink-0"
+                  disabled={toggle.isPending}
+                  onClick={() => toggle.mutate({ id: f.id, resolved: !f.resolved })}
+                >
+                  {f.resolved ? (
+                    <>
+                      <RotateCcw className="mr-1 h-4 w-4" /> Reopen
+                    </>
+                  ) : (
+                    <>
+                      <Check className="mr-1 h-4 w-4" /> Resolve
+                    </>
+                  )}
+                </Button>
+              </div>
+            ))}
+
+            {(hasPrev || hasNext) && (
+              <div className="flex items-center justify-end gap-2 pt-1 text-sm text-muted-foreground">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={!hasPrev}
+                  onClick={() => setPage((p) => p - 1)}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={!hasNext}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 function fmtDate(iso: string | null): string {
   if (!iso) return '—';
@@ -291,6 +435,7 @@ export default function AdminPage() {
               </Card>
             </div>
 
+            <FeedbackPanel />
             <UsersTable />
           </>
         )}

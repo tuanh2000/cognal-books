@@ -201,6 +201,22 @@ model AnalyticsEvent {
   @@map("analytics_events")
 }
 
+// User-submitted product feedback, shown to admins in the dashboard. The
+// sender's email is captured (from their session) so admins can follow up.
+// `userId` is kept (nullable, no relation) so feedback survives user deletion.
+model Feedback {
+  id        String   @id @default(uuid())
+  userId    String?
+  email     String
+  message   String
+  resolved  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([resolved, createdAt])
+  @@map("feedback")
+}
+
 // A translation the user saved against a specific location in a book. Powers
 // the in-reader highlights and "load from DB instead of asking the AI" flow.
 // `Translation` remains the global content cache; this is per-user/per-book.

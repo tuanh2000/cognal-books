@@ -8,6 +8,7 @@ import { ReaderModule } from './reader/reader.module';
 import { TranslationModule } from './translation/translation.module';
 import { SettingsModule } from './settings/settings.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { FeedbackModule } from './feedback/feedback.module';
 import { HealthController } from './health/health.controller';
 import { AuthGuard } from './common/auth.guard';
 import { UserThrottlerGuard } from './common/user-throttler.guard';
@@ -23,6 +24,7 @@ import { UserThrottlerGuard } from './common/user-throttler.guard';
     TranslationModule,
     SettingsModule,
     AnalyticsModule,
+    FeedbackModule,
   ],
   controllers: [HealthController],
   providers: [
