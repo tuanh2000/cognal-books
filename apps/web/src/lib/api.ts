@@ -150,6 +150,8 @@ export const api = {
     request<AdminUsersResponse>(`/admin/analytics/users?limit=${limit}&offset=${offset}`),
   getAdminBooks: (limit = 25, offset = 0) =>
     request<AdminBooksResponse>(`/admin/analytics/books?limit=${limit}&offset=${offset}`),
+  adminDeleteBook: (id: string) =>
+    request<{ ok: boolean }>(`/admin/books/${id}`, { method: 'DELETE' }),
 
   /* ── Feedback ── */
   submitFeedback: (message: string) =>

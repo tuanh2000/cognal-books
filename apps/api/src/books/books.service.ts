@@ -124,6 +124,21 @@ export class BooksService {
 
   async remove(userId: string, bookId: string): Promise<void> {
     const book = await this.requireOwned(userId, bookId);
+    await this.deleteBookAndFiles(book);
+  }
+
+  /** Admin: delete ANY book (DB rows + on-disk files), regardless of owner. */
+  async adminRemove(bookId: string): Promise<void> {
+    const book = await this.prisma.book.findUnique({ where: { id: bookId } });
+    if (!book) throw new NotFoundException('Book not found');
+    await this.deleteBookAndFiles(book);
+  }
+
+  private async deleteBookAndFiles(book: {
+    id: string;
+    filePath: string;
+    coverPath: string | null;
+  }): Promise<void> {
     // Cascade deletes chapters, progress and saved translations (see schema).
     await this.prisma.book.delete({ where: { id: book.id } });
     // Best-effort cleanup of on-disk files; ignore if already gone.
