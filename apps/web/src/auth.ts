@@ -5,6 +5,7 @@ import Credentials from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
 import { loginSchema } from '@reader/shared';
 import { prisma } from '@/lib/prisma';
+import { logEvent } from '@/lib/analytics';
 import { authConfig } from '@/auth.config';
 
 /**
@@ -46,4 +47,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
+  events: {
+    // Fired on every successful sign-in (Google or credentials).
+    signIn({ user }) {
+      logEvent('login', user.id ?? null, { email: user.email ?? undefined });
+    },
+    // Fired once when the adapter creates a user (i.e. first Google sign-in).
+    // Credentials signups are logged in /api/register instead.
+    createUser({ user }) {
+      logEvent('signup', user.id ?? null, { email: user.email ?? undefined, provider: 'google' });
+    },
+  },
 });

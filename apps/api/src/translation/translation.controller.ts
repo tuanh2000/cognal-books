@@ -12,6 +12,7 @@ import { CurrentUser, JwtUser } from '../common/current-user.decorator';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { BooksService } from '../books/books.service';
 import { SettingsService } from '../settings/settings.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 import { TranslationService } from './translation.service';
 
 @Controller()
@@ -20,6 +21,7 @@ export class TranslationController {
     private readonly translation: TranslationService,
     private readonly settings: SettingsService,
     private readonly books: BooksService,
+    private readonly analytics: AnalyticsService,
   ) {}
 
   /** Streams a translation as Server-Sent Events. Returns cache hit instantly. */
@@ -60,6 +62,7 @@ export class TranslationController {
         send({ type: 'token', value: cached.translatedText });
         await saveMark(cached.translatedText);
         send({ type: 'done', translatedText: cached.translatedText });
+        this.analytics.log('translate', user.id, { targetLang: dto.targetLang, cached: true });
         res.end();
         return;
       }
@@ -83,6 +86,11 @@ export class TranslationController {
       await this.translation.persist(hash, dto.text, full, dto.targetLang);
       await saveMark(full);
       send({ type: 'done', translatedText: full, provider: meta.provider });
+      this.analytics.log('translate', user.id, {
+        targetLang: dto.targetLang,
+        cached: false,
+        provider: meta.provider,
+      });
       res.end();
     } catch (err) {
       send({ type: 'error', message: (err as Error).message ?? 'Translation failed' });
@@ -124,6 +132,10 @@ export class TranslationController {
         send({ type: 'token', value: token });
       }
       send({ type: 'done', provider: meta.provider });
+      this.analytics.log('discuss', user.id, {
+        targetLang: dto.targetLang,
+        provider: meta.provider,
+      });
       res.end();
     } catch (err) {
       send({ type: 'error', message: (err as Error).message ?? 'Discussion failed' });

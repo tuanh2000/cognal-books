@@ -1,5 +1,6 @@
 import type {
   AddApiKeyDto,
+  AnalyticsSummary,
   ApiKeySummary,
   BookDetail,
   BookListItem,
@@ -133,6 +134,9 @@ export const api = {
     request<ApiKeySummary>('/settings/api-keys', { method: 'POST', body: JSON.stringify(dto) }),
   deleteApiKey: (id: string) =>
     request<{ ok: boolean }>(`/settings/api-keys/${id}`, { method: 'DELETE' }),
+
+  /* ── Admin analytics (admin only) ── */
+  getAnalytics: (days = 30) => request<AnalyticsSummary>(`/admin/analytics/summary?days=${days}`),
 };
 
 /* ── Streaming translation (SSE over POST) ── */

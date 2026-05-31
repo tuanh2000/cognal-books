@@ -86,13 +86,14 @@ _Low risk, reversible. Do first to make the repo a clean web project._
 - ✅ Verified against Postgres: `/api/health` public 200; no-token / malformed / wrong-secret JWT → 401; valid token → 200; API refuses to boot without `API_JWT_SECRET`.
 - ⚠️ **Deployment note (for Phase 6 nginx):** the web app owns `/api/auth/*`, `/api/register`, `/api/token`; the Nest API owns the other `/api/*`. nginx must route the three Next-owned prefixes to `web` _before_ the catch-all `/api/ → api`. (In non-Docker dev there's no conflict: web=:3000, API=:4000.)
 
-## Phase 4 — Analytics + admin dashboard ☐
+## Phase 4 — Analytics + admin dashboard ☑
 
-- ☐ Add `AnalyticsEvent` model (userId, type, metadata, createdAt)
-- ☐ NestJS interceptor logging key events: login, upload, translate, discuss, provider/key used
-- ☐ Admin-only API endpoints returning daily aggregates (DAU, translations/day, uploads, top providers, signups)
-- ☐ Build `/admin` page with charts in Next.js
-- ☐ Gate `/admin` on `ADMIN_EMAILS` in both the Next route and a NestJS `AdminGuard`
+- ☑ Added `AnalyticsEvent` model (nullable `userId`, `type`, jsonb `metadata`, `createdAt`, indexed); refreshed baseline migration (11 tables)
+- ☑ API `AnalyticsService` (fire-and-forget writer + aggregate queries) in a global module; logs `translate`/`discuss` (with provider, on done) and `upload`; web logs `login` + `signup` via Auth.js `events` and `/api/register`
+- ☑ Admin-only `GET /api/admin/analytics/summary?days=` (totals, window signups/active-users/events, events-by-type, top providers, zero-filled daily series) behind `AdminGuard`
+- ☑ `/admin` dashboard page (stat cards, daily activity chart, events-by-type + top-providers bars, 7/30/90-day range) — no new chart deps; gated by middleware + admin link in library header
+- ✅ Verified against Postgres: seeded events → admin summary returns correct aggregates (translate×3, top provider groq×3/gemini×1, today's daily bucket); non-admin token → 403.
+- ℹ️ Used explicit per-event logging at the controllers/auth events rather than a blanket interceptor — cleaner metadata (provider/targetLang/format) and no request-path noise.
 
 ## Phase 5 — API-key policy for commercial use ☐
 

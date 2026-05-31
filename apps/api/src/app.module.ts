@@ -7,6 +7,7 @@ import { BooksModule } from './books/books.module';
 import { ReaderModule } from './reader/reader.module';
 import { TranslationModule } from './translation/translation.module';
 import { SettingsModule } from './settings/settings.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { HealthController } from './health/health.controller';
 import { AuthGuard } from './common/auth.guard';
 
@@ -20,6 +21,7 @@ import { AuthGuard } from './common/auth.guard';
     ReaderModule,
     TranslationModule,
     SettingsModule,
+    AnalyticsModule,
   ],
   controllers: [HealthController],
   providers: [

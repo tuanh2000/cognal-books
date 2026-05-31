@@ -117,6 +117,17 @@ CREATE TABLE "translations" (
 );
 
 -- CreateTable
+CREATE TABLE "analytics_events" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT,
+    "type" TEXT NOT NULL,
+    "metadata" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "analytics_events_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "saved_translations" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
@@ -172,6 +183,15 @@ CREATE UNIQUE INDEX "translations_hash_key" ON "translations"("hash");
 
 -- CreateIndex
 CREATE INDEX "translations_targetLang_idx" ON "translations"("targetLang");
+
+-- CreateIndex
+CREATE INDEX "analytics_events_type_createdAt_idx" ON "analytics_events"("type", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "analytics_events_createdAt_idx" ON "analytics_events"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "analytics_events_userId_idx" ON "analytics_events"("userId");
 
 -- CreateIndex
 CREATE INDEX "saved_translations_userId_bookId_idx" ON "saved_translations"("userId", "bookId");

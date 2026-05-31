@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { registerSchema } from '@reader/shared';
 import { prisma } from '@/lib/prisma';
+import { logEvent } from '@/lib/analytics';
 
 // Email/password registration. Creates a User with a bcrypt password hash; the
 // actual sign-in afterwards goes through the Credentials provider.
@@ -35,6 +36,7 @@ export async function POST(req: Request) {
     data: { email, passwordHash, name: parsed.data.name ?? null },
     select: { id: true, email: true, name: true },
   });
+  logEvent('signup', user.id, { email: user.email, provider: 'credentials' });
 
   return NextResponse.json({ user }, { status: 201 });
 }
