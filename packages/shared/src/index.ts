@@ -28,8 +28,14 @@ export interface AuthResponse {
 
 /* ──────────────────────────  Books  ────────────────────────── */
 
+/** Source format of a book. Drives which reader the frontend mounts. */
+export const BOOK_FORMATS = ['epub', 'pdf'] as const;
+export type BookFormat = (typeof BOOK_FORMATS)[number];
+
 export interface ChapterSummary {
   id: string;
+  // For EPUB: a spine href (e.g. "OEBPS/chapter1.xhtml").
+  // For PDF: the 0-based destination page index, as a string.
   href: string;
   label: string;
   order: number;
@@ -39,6 +45,7 @@ export interface BookListItem {
   id: string;
   title: string;
   author: string | null;
+  format: BookFormat;
   coverUrl: string | null;
   createdAt: string;
   progress: ReadingProgress | null;
@@ -54,7 +61,9 @@ export interface BookDetail extends BookListItem {
 
 export const progressSchema = z.object({
   bookId: z.string().uuid(),
-  // EPUB CFI string produced by epub.js, e.g. "epubcfi(/6/14[chap]!/4/2/1:0)"
+  // Opaque location token, interpreted by the reader for the book's format.
+  // EPUB: a CFI string from epub.js, e.g. "epubcfi(/6/14[chap]!/4/2/1:0)".
+  // PDF: a JSON string, e.g. '{"page":12,"y":0.34}'.
   cfi: z.string().min(1),
   percentage: z.number().min(0).max(100),
   chapterLabel: z.string().optional(),
@@ -79,8 +88,10 @@ export const translateSchema = z.object({
   targetLang: z.enum(SUPPORTED_TARGET_LANGS).default('vi'),
   bookId: z.string().uuid().optional(),
   context: z.string().max(2000).optional(),
-  // EPUB CFI range of the selection. When present with bookId, the result is
-  // saved as a SavedTranslation (highlighted + reloadable from the DB).
+  // Opaque location token for the selection (format-specific). EPUB: a CFI
+  // range. PDF: a JSON string, e.g. '{"page":3,"start":120,"end":180}'. When
+  // present with bookId, the result is saved as a SavedTranslation
+  // (highlighted + reloadable from the DB).
   cfiRange: z.string().max(2000).optional(),
   // Bypass the cache and re-translate, overwriting the stored result.
   force: z.boolean().optional(),

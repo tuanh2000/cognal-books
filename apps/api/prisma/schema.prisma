@@ -60,7 +60,10 @@ model Book {
   title     String
   author    String?
   language  String?
-  // Path on disk (inside UPLOAD_DIR) to the stored .epub
+  // Source format of the book: "epub" or "pdf". Drives which reader the
+  // frontend mounts and the Content-Type used when serving the raw file.
+  format    String   @default("epub")
+  // Path on disk (inside UPLOAD_DIR) to the stored book file (.epub / .pdf)
   filePath  String
   fileSize  Int
   // Path on disk to the extracted cover image, if any

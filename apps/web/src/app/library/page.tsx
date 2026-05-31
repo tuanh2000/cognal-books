@@ -54,7 +54,7 @@ export default function LibraryPage() {
         ) : (
           <div className="rounded-xl border border-dashed py-20 text-center text-muted-foreground">
             <BookOpen className="mx-auto mb-3 h-10 w-10 opacity-50" />
-            <p>No books yet. Upload your first EPUB above.</p>
+            <p>No books yet. Upload your first EPUB or PDF above.</p>
           </div>
         )}
       </main>

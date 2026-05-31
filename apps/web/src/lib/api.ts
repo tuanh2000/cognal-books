@@ -46,9 +46,11 @@ export const api = {
   getBook: (id: string) => request<BookDetail>(`/books/${id}`),
   deleteBook: (id: string) => request<{ ok: boolean }>(`/books/${id}`, { method: 'DELETE' }),
 
-  uploadBook: async (file: File): Promise<BookDetail> => {
+  uploadBook: async (file: File, cover?: Blob | null): Promise<BookDetail> => {
     const form = new FormData();
     form.append('file', file);
+    // Optional pre-rendered cover (PDF page 1); EPUB covers come from the file.
+    if (cover) form.append('cover', cover, 'cover.png');
     const res = await fetch(`${API_URL}/books/upload`, {
       method: 'POST',
       body: form,

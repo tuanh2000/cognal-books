@@ -1,16 +1,16 @@
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { promises as fs } from 'fs';
-import { join, extname } from 'path';
-import type { BookDetail, BookListItem, ReadingProgress } from '@reader/shared';
+import { join, extname, basename } from 'path';
+import type { BookDetail, BookListItem, BookFormat, ReadingProgress } from '@reader/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { ParserRegistry } from '../parsers/parser.registry';
 import { ParsedCover } from '../parsers/interfaces/ebook-parser.interface';
 import { getUploadDir } from '../common/paths';
+
+const CONTENT_TYPE: Record<string, string> = {
+  epub: 'application/epub+zip',
+  pdf: 'application/pdf',
+};
 
 // Books/covers live under ${READER_DATA_DIR}/uploads (overridable via UPLOAD_DIR).
 // Resolved lazily so it picks up READER_DATA_DIR set during main.ts bootstrap.
@@ -31,15 +31,22 @@ export class BooksService {
     private readonly parsers: ParserRegistry,
   ) {}
 
-  async upload(userId: string, file: Express.Multer.File): Promise<BookDetail> {
-    const ext = extname(file.originalname).toLowerCase();
-    if (ext !== '.epub') {
-      throw new BadRequestException('Only .epub files are supported');
-    }
-
-    const parser = this.parsers.forExtension('epub');
+  async upload(
+    userId: string,
+    file: Express.Multer.File,
+    cover?: Express.Multer.File,
+  ): Promise<BookDetail> {
+    // `forExtension` throws UnsupportedMediaTypeException for unknown formats.
+    const format = extname(file.originalname).toLowerCase().replace(/^\./, '') as BookFormat;
+    const parser = this.parsers.forExtension(format);
     await parser.validate(file.buffer);
     const parsed = await parser.parse(file.buffer);
+
+    // PDFs often lack a Title in their metadata — fall back to the filename.
+    const title =
+      parsed.title && parsed.title !== 'Untitled'
+        ? parsed.title
+        : basename(file.originalname, extname(file.originalname)) || 'Untitled';
 
     const userDir = join(UPLOAD_DIR, userId);
     await fs.mkdir(userDir, { recursive: true });
@@ -47,9 +54,10 @@ export class BooksService {
     const book = await this.prisma.book.create({
       data: {
         userId,
-        title: parsed.title,
+        title,
         author: parsed.author,
         language: parsed.language,
+        format,
         filePath: '', // set after we know the id
         fileSize: file.size,
         chapters: {
@@ -62,10 +70,15 @@ export class BooksService {
       },
     });
 
-    const filePath = join(userDir, `${book.id}.epub`);
+    const filePath = join(userDir, `${book.id}.${format}`);
     await fs.writeFile(filePath, file.buffer);
 
-    const coverPath = await this.writeCover(userDir, book.id, parsed.cover);
+    // Prefer the parser's embedded cover (EPUB); otherwise use the client-
+    // rendered cover (PDF page 1) if one was uploaded.
+    const coverSource: ParsedCover | null =
+      parsed.cover ??
+      (cover ? { data: cover.buffer, mimeType: cover.mimetype || 'image/png' } : null);
+    const coverPath = await this.writeCover(userDir, book.id, coverSource);
 
     const updated = await this.prisma.book.update({
       where: { id: book.id },
@@ -110,10 +123,16 @@ export class BooksService {
     return this.toDetail(book, book.progress[0] ?? null);
   }
 
-  /** Returns the on-disk path of the raw epub after verifying ownership. */
-  async getFilePath(userId: string, bookId: string): Promise<string> {
+  /** Returns the on-disk path + Content-Type of the raw book file (ownership-checked). */
+  async getFileLocation(
+    userId: string,
+    bookId: string,
+  ): Promise<{ path: string; mimeType: string }> {
     const book = await this.requireOwned(userId, bookId);
-    return book.filePath;
+    return {
+      path: book.filePath,
+      mimeType: CONTENT_TYPE[book.format] ?? 'application/octet-stream',
+    };
   }
 
   async getCoverPath(userId: string, bookId: string): Promise<string> {
@@ -146,6 +165,7 @@ export class BooksService {
       id: string;
       title: string;
       author: string | null;
+      format: string;
       coverPath: string | null;
       createdAt: Date;
     },
@@ -160,6 +180,7 @@ export class BooksService {
       id: book.id,
       title: book.title,
       author: book.author,
+      format: (book.format === 'pdf' ? 'pdf' : 'epub') as BookFormat,
       coverUrl: book.coverPath ? `/books/${book.id}/cover` : null,
       createdAt: book.createdAt.toISOString(),
       progress: progress ? this.toProgress(book.id, progress) : null,
@@ -172,6 +193,7 @@ export class BooksService {
       title: string;
       author: string | null;
       language: string | null;
+      format: string;
       coverPath: string | null;
       createdAt: Date;
       chapters: { id: string; href: string; label: string; order: number }[];

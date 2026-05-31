@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, UploadCloud } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
+import { renderPdfCover } from '@/lib/pdf-cover';
 import { cn } from '@/lib/utils';
 
 export function UploadDropzone() {
@@ -13,7 +14,11 @@ export function UploadDropzone() {
   const [error, setError] = useState<string | null>(null);
 
   const upload = useMutation({
-    mutationFn: (file: File) => api.uploadBook(file),
+    mutationFn: async (file: File) => {
+      // PDFs carry no embedded cover — render page 1 here and send it along.
+      const cover = file.name.toLowerCase().endsWith('.pdf') ? await renderPdfCover(file) : null;
+      return api.uploadBook(file, cover);
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['books'] }),
     onError: (err) => setError(err instanceof ApiError ? err.message : 'Upload failed'),
   });
@@ -23,8 +28,9 @@ export function UploadDropzone() {
       setError(null);
       const file = files?.[0];
       if (!file) return;
-      if (!file.name.toLowerCase().endsWith('.epub')) {
-        setError('Only .epub files are supported');
+      const name = file.name.toLowerCase();
+      if (!name.endsWith('.epub') && !name.endsWith('.pdf')) {
+        setError('Only .epub and .pdf files are supported');
         return;
       }
       upload.mutate(file);
@@ -60,13 +66,13 @@ export function UploadDropzone() {
           <UploadCloud className="h-8 w-8 text-muted-foreground" />
         )}
         <p className="font-medium">
-          {upload.isPending ? 'Uploading…' : 'Drop an EPUB here, or click to browse'}
+          {upload.isPending ? 'Uploading…' : 'Drop an EPUB or PDF here, or click to browse'}
         </p>
-        <p className="text-sm text-muted-foreground">.epub files only</p>
+        <p className="text-sm text-muted-foreground">.epub and .pdf files</p>
         <input
           ref={inputRef}
           type="file"
-          accept=".epub,application/epub+zip"
+          accept=".epub,application/epub+zip,.pdf,application/pdf"
           className="hidden"
           onChange={(e) => handleFiles(e.target.files)}
         />

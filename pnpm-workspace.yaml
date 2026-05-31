@@ -22,3 +22,6 @@ allowBuilds:
   esbuild: true
   core-js: false
   es5-ext: false
+  # pdfjs-dist pulls in canvas only for Node-side PDF rendering, which we never
+  # do — the API parser stubs DOMMatrix/Path2D, so the native binding is unused.
+  canvas: false
