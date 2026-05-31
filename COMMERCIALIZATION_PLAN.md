@@ -41,16 +41,17 @@ Auth.js owns login/session in Next.js using the **Prisma adapter against the sam
 
 ---
 
-## Phase 0 — Strip desktop & rebrand ☐
+## Phase 0 — Strip desktop & rebrand ☑
 
 _Low risk, reversible. Do first to make the repo a clean web project._
 
-- ☐ Delete `apps/desktop/`, `scripts/release.sh`, `.github/workflows/release.yml`, `RELEASING.md`, `MIGRATION_PLAN.md`
-- ☐ Root `package.json`: remove `desktop:*` + `release` scripts
-- ☐ `pnpm-workspace.yaml`: drop `electron` / `electron-builder` `allowBuilds` entries
-- ☐ `apps/web/next.config.mjs`: `output: 'export'` → `output: 'standalone'`
-- ☐ Rebrand Lumen → Cognal: `apps/web/src/app/layout.tsx` (title/theme-color), `apps/web/src/app/library/page.tsx` (header), `apps/web/public/site.webmanifest`, swap favicon/icon assets in `apps/web/public/`
+- ☑ Delete `apps/desktop/`, `scripts/release.sh`, `.github/workflows/release.yml`, `RELEASING.md`, `MIGRATION_PLAN.md`
+- ☑ Root `package.json`: remove `desktop:*` + `release` scripts (also renamed pkg `ai-reading-assistant` → `cognal`, dropped desktop-only devDeps concurrently/cross-env/wait-on)
+- ☑ `pnpm-workspace.yaml`: drop `electron` / `electron-builder` `allowBuilds` entries
+- ☑ `apps/web/next.config.mjs`: `output: 'export'` → `output: 'standalone'`
+- ☑ Rebrand Lumen → Cognal: `layout.tsx`, `library/page.tsx`, `site.webmanifest`, `README.md` title, `translation-providers.ts` `X-Title`. **TODO:** favicon/icon image assets still say Lumen visually — regenerate later.
 - ☐ (Optional, deferred) rename `@reader/*` package scope → `@cognal/*`
+- ✅ Verified: `pnpm install` clean (no electron), `@reader/web` + `@reader/api` both build.
 
 ## Phase 1 — SQLite → PostgreSQL ☐
 

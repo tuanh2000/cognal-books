@@ -1,4 +1,4 @@
-# Lumen — AI-Assisted EPUB Reader
+# Cognal — AI-Assisted EPUB Reader
 
 Upload EPUBs, read them in a clean distraction-free reader, highlight any passage,
 and stream a natural Vietnamese translation in real time. Translations are cached
@@ -11,12 +11,12 @@ and stream a natural Vietnamese translation in real time. Translations are cache
 
 ## Tech stack
 
-| Layer        | Tech                                                                  |
-| ------------ | --------------------------------------------------------------------- |
+| Layer        | Tech                                                                                                   |
+| ------------ | ------------------------------------------------------------------------------------------------------ |
 | **Frontend** | Next.js (App Router) · TypeScript · TailwindCSS · EPUB.js · Zustand · TanStack Query · shadcn-style UI |
-| **Backend**  | NestJS · TypeScript · Prisma · PostgreSQL · Redis · OpenAI SDK        |
-| **Infra**    | Docker · Docker Compose · Nginx (reverse proxy + SSE passthrough)     |
-| **Monorepo** | pnpm workspaces (`apps/web`, `apps/api`, `packages/shared`)           |
+| **Backend**  | NestJS · TypeScript · Prisma · PostgreSQL · Redis · OpenAI SDK                                         |
+| **Infra**    | Docker · Docker Compose · Nginx (reverse proxy + SSE passthrough)                                      |
+| **Monorepo** | pnpm workspaces (`apps/web`, `apps/api`, `packages/shared`)                                            |
 
 ---
 
@@ -91,12 +91,12 @@ docker compose up --build
 
 Then open **http://localhost:8080**. Migrations run automatically on API start.
 
-| Service  | URL / port               |
-| -------- | ------------------------ |
-| App      | http://localhost:8080    |
-| API      | proxied at `/api`        |
-| Postgres | internal `5432`          |
-| Redis    | internal `6379`          |
+| Service  | URL / port            |
+| -------- | --------------------- |
+| App      | http://localhost:8080 |
+| API      | proxied at `/api`     |
+| Postgres | internal `5432`       |
+| Redis    | internal `6379`       |
 
 ---
 
@@ -127,20 +127,20 @@ Or run both apps at once from the repo root: `pnpm dev`.
 
 ## API reference
 
-| Method | Endpoint                | Auth | Description                              |
-| ------ | ----------------------- | ---- | ---------------------------------------- |
-| POST   | `/api/auth/register`    | —    | Create account → `{ accessToken, user }` |
-| POST   | `/api/auth/login`       | —    | Log in → `{ accessToken, user }`         |
-| GET    | `/api/auth/me`          | ✓    | Current user                             |
-| POST   | `/api/books/upload`     | ✓    | Multipart `file` (.epub) → `BookDetail`  |
-| GET    | `/api/books`            | ✓    | List user's books (+ progress)           |
-| GET    | `/api/books/:id`        | ✓    | Book detail + chapters                   |
-| GET    | `/api/books/:id/file`   | ✓    | Raw `.epub` stream (for EPUB.js)         |
-| GET    | `/api/books/:id/cover`  | ✓    | Cover image                              |
-| POST   | `/api/translate`        | ✓    | SSE stream of Vietnamese translation     |
-| GET    | `/api/translations/:hash` | ✓  | Cached translation lookup                |
-| POST   | `/api/progress`         | ✓    | Upsert reading progress                  |
-| GET    | `/api/progress/:bookId` | ✓    | Fetch reading progress                   |
+| Method | Endpoint                  | Auth | Description                              |
+| ------ | ------------------------- | ---- | ---------------------------------------- |
+| POST   | `/api/auth/register`      | —    | Create account → `{ accessToken, user }` |
+| POST   | `/api/auth/login`         | —    | Log in → `{ accessToken, user }`         |
+| GET    | `/api/auth/me`            | ✓    | Current user                             |
+| POST   | `/api/books/upload`       | ✓    | Multipart `file` (.epub) → `BookDetail`  |
+| GET    | `/api/books`              | ✓    | List user's books (+ progress)           |
+| GET    | `/api/books/:id`          | ✓    | Book detail + chapters                   |
+| GET    | `/api/books/:id/file`     | ✓    | Raw `.epub` stream (for EPUB.js)         |
+| GET    | `/api/books/:id/cover`    | ✓    | Cover image                              |
+| POST   | `/api/translate`          | ✓    | SSE stream of Vietnamese translation     |
+| GET    | `/api/translations/:hash` | ✓    | Cached translation lookup                |
+| POST   | `/api/progress`           | ✓    | Upsert reading progress                  |
+| GET    | `/api/progress/:bookId`   | ✓    | Fetch reading progress                   |
 
 Authenticated requests use `Authorization: Bearer <accessToken>`.
 
@@ -154,12 +154,12 @@ provider fails (out of quota, bad key, rate-limited, network error) before any t
 streams. A provider is enabled only when its key is set — so just add a key to turn
 it on. All endpoints below are OpenAI-compatible.
 
-| Provider   | Key env              | Free tier?            | Default model                              | Sign up |
-| ---------- | -------------------- | --------------------- | ------------------------------------------ | ------- |
-| Gemini     | `GEMINI_API_KEY`     | ✅ generous, no card   | `gemini-2.0-flash`                         | https://aistudio.google.com/apikey |
-| Groq       | `GROQ_API_KEY`       | ✅ (rate-limited)      | `llama-3.3-70b-versatile`                  | https://console.groq.com/keys |
-| OpenRouter | `OPENROUTER_API_KEY` | ✅ free models (`:free`) | `meta-llama/llama-3.3-70b-instruct:free` | https://openrouter.ai/keys |
-| OpenAI     | `OPENAI_API_KEY`     | ❌ paid (prepaid)      | `gpt-4o-mini`                              | https://platform.openai.com |
+| Provider   | Key env              | Free tier?               | Default model                            | Sign up                            |
+| ---------- | -------------------- | ------------------------ | ---------------------------------------- | ---------------------------------- |
+| Gemini     | `GEMINI_API_KEY`     | ✅ generous, no card     | `gemini-2.0-flash`                       | https://aistudio.google.com/apikey |
+| Groq       | `GROQ_API_KEY`       | ✅ (rate-limited)        | `llama-3.3-70b-versatile`                | https://console.groq.com/keys      |
+| OpenRouter | `OPENROUTER_API_KEY` | ✅ free models (`:free`) | `meta-llama/llama-3.3-70b-instruct:free` | https://openrouter.ai/keys         |
+| OpenAI     | `OPENAI_API_KEY`     | ❌ paid (prepaid)        | `gpt-4o-mini`                            | https://platform.openai.com        |
 
 > **Note:** A ChatGPT (chatgpt.com) subscription does **not** fund the OpenAI API — it's
 > billed separately. If you want a free option, use Gemini, Groq, or OpenRouter.

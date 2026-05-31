@@ -1,8 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Static export for loading via file:// inside Electron.
-  output: 'export',
+  // Server-rendered standalone output for web/Docker deployment.
+  output: 'standalone',
   images: { unoptimized: true },
   // Compile the shared workspace package from source.
   transpilePackages: ['@reader/shared'],
