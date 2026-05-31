@@ -95,11 +95,13 @@ _Low risk, reversible. Do first to make the repo a clean web project._
 - ✅ Verified against Postgres: seeded events → admin summary returns correct aggregates (translate×3, top provider groq×3/gemini×1, today's daily bucket); non-admin token → 403.
 - ℹ️ Used explicit per-event logging at the controllers/auth events rather than a blanket interceptor — cleaner metadata (provider/targetLang/format) and no request-path noise.
 
-## Phase 5 — API-key policy for commercial use ☐
+## Phase 5 — API-key policy for commercial use ☑
 
-- ☐ Keep dual-tier: shared Groq env keys (free period) + encrypted per-user BYO keys (already built, takes precedence)
-- ☐ Per-user rate limiting / quota on shared keys (Throttler keyed by `userId`; optional daily cap in DB)
-- ☐ Settings UI copy: "Using free Cognal AI (Groq) — or add your own key"
+- ☑ Dual-tier unchanged: shared env keys (free Groq period) + encrypted per-user BYO keys (take precedence) — already built
+- ☑ `UserThrottlerGuard` keys the rate limit on the token subject (`user:<id>`), not IP (critical behind nginx); falls back to IP for public routes
+- ☑ Free-tier cap: when a user has **no** keys of their own, translate+discuss are capped over a rolling 24h window (`FREE_DAILY_LIMIT`, default 200, `0`=off) using the analytics event count; surfaced as an SSE `error` telling them to add a key; users with their own keys are never limited
+- ☑ Settings UI: "Using free Cognal AI" banner explaining the shared Groq + fair-use limit and how to remove it; `FREE_DAILY_LIMIT` + `API_JWT_SECRET` added to `apps/api/.env.example`
+- ✅ Verified: cap hit → SSE limit error; `=0` → no cap (proceeds); normal authed GET still 200 under the user-keyed throttler.
 
 ## Phase 6 — Deployment (single VPS, Docker Compose) ☐
 

@@ -104,8 +104,16 @@ export default function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <KeyRound className="h-5 w-5" /> Add an AI API key
+              <KeyRound className="h-5 w-5" /> AI provider keys
             </CardTitle>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">
+              <p className="font-medium text-primary">Using free Cognal AI</p>
+              <p className="text-muted-foreground">
+                Translation and discussion run on Cognal&apos;s shared AI (Groq) for free, with a
+                fair-use daily limit. Add your own API key below to remove the limit and pick your
+                preferred provider/model.
+              </p>
+            </div>
             <p className="text-sm text-muted-foreground">
               Choose a platform first, then paste an API key for it. You can add several keys for
               the same platform — they&apos;re rotated automatically to spread usage across multiple

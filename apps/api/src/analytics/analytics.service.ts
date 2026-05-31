@@ -27,6 +27,13 @@ export class AnalyticsService {
       .catch((err) => this.logger.warn(`Failed to log analytics event "${type}": ${err.message}`));
   }
 
+  /** Count a user's events of the given types since `since` (free-tier metering). */
+  countUserEventsSince(userId: string, types: AnalyticsEventType[], since: Date): Promise<number> {
+    return this.prisma.analyticsEvent.count({
+      where: { userId, type: { in: types }, createdAt: { gte: since } },
+    });
+  }
+
   /** Aggregate metrics for the admin dashboard over the last `days` days. */
   async summary(days: number): Promise<AnalyticsSummary> {
     const rangeDays = Math.min(Math.max(Math.trunc(days) || 30, 1), 365);

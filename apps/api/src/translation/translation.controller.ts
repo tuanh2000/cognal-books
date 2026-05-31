@@ -24,6 +24,25 @@ export class TranslationController {
     private readonly analytics: AnalyticsService,
   ) {}
 
+  /**
+   * Free-tier metering: when a user relies on the shared Cognal keys (i.e. has
+   * configured none of their own), cap their AI calls over a rolling 24h window.
+   * Users with their own keys are never limited. FREE_DAILY_LIMIT=0 disables it.
+   * Returns a message to surface (via SSE error) when the cap is hit, else null.
+   */
+  private async freeTierBlockMessage(
+    userId: string,
+    usingSharedKeys: boolean,
+  ): Promise<string | null> {
+    if (!usingSharedKeys) return null;
+    const limit = Number(process.env.FREE_DAILY_LIMIT ?? 200);
+    if (!Number.isFinite(limit) || limit <= 0) return null;
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const used = await this.analytics.countUserEventsSince(userId, ['translate', 'discuss'], since);
+    if (used < limit) return null;
+    return `Daily free AI limit reached (${limit}/day). Add your own API key in Settings to keep going.`;
+  }
+
   /** Streams a translation as Server-Sent Events. Returns cache hit instantly. */
   @Post('translate')
   async translate(
@@ -72,6 +91,12 @@ export class TranslationController {
       const meta: { provider?: string } = {};
       // Use the user's own API keys when configured; falls back to shared env keys.
       const userProviders = await this.settings.buildUserProviders(user.id);
+      const block = await this.freeTierBlockMessage(user.id, userProviders.length === 0);
+      if (block) {
+        send({ type: 'error', message: block });
+        res.end();
+        return;
+      }
       for await (const token of this.translation.stream(
         dto.text,
         dto.targetLang,
@@ -121,6 +146,12 @@ export class TranslationController {
       const book = await this.books.getDetail(user.id, dto.bookId);
       const meta: { provider?: string } = {};
       const userProviders = await this.settings.buildUserProviders(user.id);
+      const block = await this.freeTierBlockMessage(user.id, userProviders.length === 0);
+      if (block) {
+        send({ type: 'error', message: block });
+        res.end();
+        return;
+      }
       for await (const token of this.translation.discuss(
         dto.text,
         dto.messages,
