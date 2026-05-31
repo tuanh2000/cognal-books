@@ -175,10 +175,31 @@ export class BooksService {
     };
   }
 
-  async getCoverPath(userId: string, bookId: string): Promise<string> {
-    const book = await this.requireReadable(userId, bookId);
+  async getCoverPath(userId: string, bookId: string, isAdmin = false): Promise<string> {
+    // Admins may view any cover (e.g. to manage covers in the dashboard);
+    // everyone else needs read access (owner or public).
+    const book = isAdmin
+      ? await this.prisma.book.findUnique({ where: { id: bookId } })
+      : await this.requireReadable(userId, bookId);
+    if (!book) throw new NotFoundException('Book not found');
     if (!book.coverPath) throw new NotFoundException('No cover');
     return book.coverPath;
+  }
+
+  /** Admin: replace a book's cover image with an uploaded one. */
+  async adminSetCover(bookId: string, cover: ParsedCover): Promise<void> {
+    const book = await this.prisma.book.findUnique({ where: { id: bookId } });
+    if (!book) throw new NotFoundException('Book not found');
+
+    // Remove the previous cover file if it has a different extension/name.
+    const userDir = join(UPLOAD_DIR, book.userId);
+    await fs.mkdir(userDir, { recursive: true });
+    const newPath = await this.writeCover(userDir, book.id, cover);
+    if (book.coverPath && book.coverPath !== newPath) {
+      await fs.rm(book.coverPath, { force: true }).catch(() => undefined);
+    }
+    // Bumps updatedAt → the admin list's versioned coverUrl busts the cache.
+    await this.prisma.book.update({ where: { id: book.id }, data: { coverPath: newPath } });
   }
 
   private async requireOwned(userId: string, bookId: string) {

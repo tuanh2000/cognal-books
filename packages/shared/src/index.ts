@@ -72,6 +72,8 @@ export interface AdminBookRow {
   format: BookFormat;
   fileSize: number;
   createdAt: string;
+  /** Cover image URL (versioned for cache-busting), or null if none. */
+  coverUrl: string | null;
   /** Who uploaded it. */
   ownerEmail: string;
   ownerName: string | null;
