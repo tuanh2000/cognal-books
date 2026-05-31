@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Loader2,
   RotateCcw,
+  Trash2,
 } from 'lucide-react';
 import type { AnalyticsSummary } from '@reader/shared';
 import { api } from '@/lib/api';
@@ -181,11 +182,22 @@ function fmtBytes(bytes: number): string {
 }
 
 function BooksTable() {
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
   const { data, isLoading, isError } = useQuery({
     queryKey: ['admin-books', page],
     queryFn: () => api.getAdminBooks(USERS_PAGE_SIZE, page * USERS_PAGE_SIZE),
     placeholderData: keepPreviousData,
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.adminDeleteBook(id),
+    onSuccess: () => {
+      setConfirmId(null);
+      queryClient.invalidateQueries({ queryKey: ['admin-books'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
+    },
   });
 
   const total = data?.total ?? 0;
@@ -244,6 +256,7 @@ function BooksTable() {
                   <th className="px-2 py-2 font-medium">Size</th>
                   <th className="px-2 py-2 font-medium">Submitted by</th>
                   <th className="px-2 py-2 font-medium">Uploaded</th>
+                  <th className="px-2 py-2 font-medium"></th>
                 </tr>
               </thead>
               <tbody>
@@ -264,6 +277,37 @@ function BooksTable() {
                       )}
                     </td>
                     <td className="px-2 py-2 text-muted-foreground">{fmtDate(b.createdAt)}</td>
+                    <td className="px-2 py-2 text-right">
+                      {confirmId === b.id ? (
+                        <span className="inline-flex items-center gap-1">
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            disabled={remove.isPending}
+                            onClick={() => remove.mutate(b.id)}
+                          >
+                            {remove.isPending ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              'Delete'
+                            )}
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => setConfirmId(null)}>
+                            Cancel
+                          </Button>
+                        </span>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Delete book"
+                          title="Delete book (removes file + data)"
+                          onClick={() => setConfirmId(b.id)}
+                        >
+                          <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                        </Button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

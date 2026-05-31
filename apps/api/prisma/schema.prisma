@@ -118,6 +118,9 @@ model Book {
   // Source format of the book: "epub" or "pdf". Drives which reader the
   // frontend mounts and the Content-Type used when serving the raw file.
   format    String   @default("epub")
+  // When true, any signed-in user can read this book (owner shares it publicly).
+  // Reading progress + saved translations stay per-user (keyed by userId).
+  isPublic  Boolean  @default(false)
   // Path on disk (inside UPLOAD_DIR) to the stored book file (.epub / .pdf)
   filePath  String
   fileSize  Int
@@ -132,6 +135,7 @@ model Book {
   savedTranslations SavedTranslation[]
 
   @@index([userId])
+  @@index([isPublic])
   @@map("books")
 }
 

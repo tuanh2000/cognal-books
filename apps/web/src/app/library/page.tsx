@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useSession, signOut } from 'next-auth/react';
-import { BarChart3, BookOpen, Loader2, LogOut, Settings } from 'lucide-react';
+import { BarChart3, BookOpen, Globe, Loader2, LogOut, Settings } from 'lucide-react';
 import { api } from '@/lib/api';
 import { UploadDropzone } from '@/components/upload-dropzone';
 import { BookCard } from '@/components/book-card';
@@ -17,6 +17,10 @@ export default function LibraryPage() {
   const { data: books, isLoading } = useQuery({
     queryKey: ['books'],
     queryFn: api.listBooks,
+  });
+  const { data: publicBooks } = useQuery({
+    queryKey: ['public-books'],
+    queryFn: api.listPublicBooks,
   });
 
   return (
@@ -76,6 +80,22 @@ export default function LibraryPage() {
             <BookOpen className="mx-auto mb-3 h-10 w-10 opacity-50" />
             <p>No books yet. Upload your first EPUB or PDF above.</p>
           </div>
+        )}
+
+        {publicBooks && publicBooks.length > 0 && (
+          <section className="mt-12">
+            <h2 className="mb-1 flex items-center gap-2 text-xl font-semibold tracking-tight">
+              <Globe className="h-5 w-5 text-primary" /> Shared with everyone
+            </h2>
+            <p className="mb-6 text-sm text-muted-foreground">
+              Books other readers have shared publicly.
+            </p>
+            <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+              {publicBooks.map((book) => (
+                <BookCard key={book.id} book={book} />
+              ))}
+            </div>
+          </section>
         )}
       </main>
     </div>
