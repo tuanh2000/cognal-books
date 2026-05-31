@@ -3,33 +3,16 @@ import { mkdirSync } from 'fs';
 import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
 import { getUploadDir } from './common/paths';
-import { LOCAL_USER_ID, LOCAL_USER_EMAIL } from './common/local-user';
 import { AppModule } from './app.module';
-
-/**
- * Ensure the single local user row exists so userId foreign keys resolve.
- *
- * NOTE: this is a transitional shim from the single-user desktop app. Real
- * multi-user auth (Auth.js) replaces it in a later phase, at which point this
- * and common/local-user.ts are removed.
- */
-async function ensureLocalUser(): Promise<void> {
-  const { PrismaClient } = await import('@prisma/client');
-  const prisma = new PrismaClient();
-  try {
-    await prisma.user.upsert({
-      where: { id: LOCAL_USER_ID },
-      create: { id: LOCAL_USER_ID, email: LOCAL_USER_EMAIL, passwordHash: '' },
-      update: {},
-    });
-  } finally {
-    await prisma.$disconnect();
-  }
-}
 
 async function bootstrap() {
   if (!process.env.DATABASE_URL) {
     throw new Error('DATABASE_URL is required (PostgreSQL connection string).');
+  }
+  if (!process.env.API_JWT_SECRET) {
+    throw new Error(
+      'API_JWT_SECRET is required (shared with the web app to verify access tokens).',
+    );
   }
 
   // Uploads live on a mounted volume in Docker (UPLOAD_DIR); create it if absent.
@@ -39,7 +22,6 @@ async function bootstrap() {
 
   // Schema migrations are applied out-of-band via `prisma migrate deploy`
   // (Docker entrypoint) / `prisma migrate dev` (local) — not at runtime.
-  await ensureLocalUser();
 
   const app = await NestFactory.create(AppModule, { cors: false });
 

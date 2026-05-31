@@ -12,7 +12,7 @@ import type {
   UpsertProgressDto,
 } from '@reader/shared';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4317/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4000/api';
 
 export class ApiError extends Error {
   constructor(
@@ -23,13 +23,51 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Cached access token for the NestJS API. Minted by the web app's /api/token
+ * route from the Auth.js session and sent as `Authorization: Bearer`. Cached in
+ * memory until shortly before it expires, then transparently re-fetched.
+ */
+let tokenCache: { token: string; exp: number } | null = null;
+
+function decodeExp(token: string): number {
+  try {
+    const [, payload] = token.split('.');
+    const json = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+    return typeof json.exp === 'number' ? json.exp : 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function getAccessToken(): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  if (tokenCache && tokenCache.exp - 30 > now) return tokenCache.token;
+
+  // Same-origin call to the Next.js route; the session cookie is sent automatically.
+  const res = await fetch('/api/token');
+  if (!res.ok) {
+    tokenCache = null;
+    throw new ApiError('Not authenticated', res.status);
+  }
+  const { token } = (await res.json()) as { token: string };
+  tokenCache = { token, exp: decodeExp(token) || now + 3600 };
+  return token;
+}
+
+/** Authorization header (+ optional extras) with a fresh access token. */
+async function authHeaders(extra?: Record<string, string>): Promise<Record<string, string>> {
+  const token = await getAccessToken();
+  return { Authorization: `Bearer ${token}`, ...(extra ?? {}) };
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
-    headers: {
+    headers: await authHeaders({
       'Content-Type': 'application/json',
-      ...(init.headers ?? {}),
-    },
+      ...((init.headers as Record<string, string>) ?? {}),
+    }),
   });
 
   if (!res.ok) {
@@ -53,6 +91,7 @@ export const api = {
     if (cover) form.append('cover', cover, 'cover.png');
     const res = await fetch(`${API_URL}/books/upload`, {
       method: 'POST',
+      headers: await authHeaders(),
       body: form,
     });
     if (!res.ok) {
@@ -64,14 +103,14 @@ export const api = {
 
   /** Fetch the raw epub as an ArrayBuffer. */
   getBookFile: async (id: string): Promise<ArrayBuffer> => {
-    const res = await fetch(`${API_URL}/books/${id}/file`);
+    const res = await fetch(`${API_URL}/books/${id}/file`, { headers: await authHeaders() });
     if (!res.ok) throw new ApiError('Failed to load book file', res.status);
     return res.arrayBuffer();
   },
 
   /** Fetch a cover image as an object URL. */
   getCoverObjectUrl: async (coverUrl: string): Promise<string | null> => {
-    const res = await fetch(`${API_URL}${coverUrl}`);
+    const res = await fetch(`${API_URL}${coverUrl}`, { headers: await authHeaders() });
     if (!res.ok) return null;
     const blob = await res.blob();
     return URL.createObjectURL(blob);
@@ -109,7 +148,7 @@ export async function streamTranslation(
 ): Promise<void> {
   const res = await fetch(`${API_URL}/translate`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(dto),
     signal,
   });
@@ -163,7 +202,7 @@ export async function streamDiscuss(
 ): Promise<void> {
   const res = await fetch(`${API_URL}/discuss`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(dto),
     signal,
   });

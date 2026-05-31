@@ -76,13 +76,15 @@ _Low risk, reversible. Do first to make the repo a clean web project._
 - ✅ Verified end-to-end (against Postgres): web build incl. all auth routes + edge middleware; register→CSRF→credentials login→session (`isAdmin:true`)→token mint; minted JWT verifies with shared secret (and rejects a wrong one); password stored as bcrypt `$2b$12$`.
 - ⚠️ Live **Google OAuth** not e2e-tested here (needs real client id/secret + browser redirect); provider is wired per Auth.js v5 conventions.
 
-## Phase 3 — Wire the API to real users ☐
+## Phase 3 — Wire the API to real users ☑
 
-- ☐ `apps/web/src/lib/api.ts`: attach `Bearer` access token to every request (including SSE)
-- ☐ NestJS `AuthGuard` verifies the token; `current-user.decorator.ts` returns the real user
-- ☐ Delete `local-user.ts` and the bootstrap upsert in `main.ts`
-- ☐ Confirm all services scope by `userId` (they already do): books, progress, translations, saved marks, API keys
-- ☐ Lock CORS to the real web origin (currently allow-all)
+- ☑ `apps/web/src/lib/api.ts`: fetches a token from `/api/token` (cached until ~30s before expiry), attaches `Bearer` to every call incl. upload, file/cover fetch, and both SSE streams
+- ☑ NestJS global `AuthGuard` (`jose` HS256, `API_JWT_SECRET`) verifies the token and attaches the user; `@Public()` decorator + `GET /api/health` exempt; `current-user.decorator.ts` now returns the real user (`id`,`email`,`isAdmin`)
+- ☑ Deleted `local-user.ts` and the bootstrap upsert; `main.ts` now requires `API_JWT_SECRET` at boot
+- ☑ All services already scope by `userId` — unchanged, now driven by the real token subject
+- ☑ CORS already restricted via `CORS_ORIGINS` (Phase 1)
+- ✅ Verified against Postgres: `/api/health` public 200; no-token / malformed / wrong-secret JWT → 401; valid token → 200; API refuses to boot without `API_JWT_SECRET`.
+- ⚠️ **Deployment note (for Phase 6 nginx):** the web app owns `/api/auth/*`, `/api/register`, `/api/token`; the Nest API owns the other `/api/*`. nginx must route the three Next-owned prefixes to `web` _before_ the catch-all `/api/ → api`. (In non-Docker dev there's no conflict: web=:3000, API=:4000.)
 
 ## Phase 4 — Analytics + admin dashboard ☐
 
