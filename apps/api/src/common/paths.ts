@@ -1,27 +1,11 @@
-import { resolve, join } from 'path';
+import { resolve } from 'path';
 
 /**
- * Resolve the single data directory that holds the SQLite DB and uploads.
+ * Absolute path to the uploads dir (stored book files + cover images).
  *
- * Electron passes this via READER_DATA_DIR (app.getPath('userData')). When
- * unset (dev / standalone), it falls back to `<cwd>/.reader-data` at the repo
- * root, per the migration contract.
+ * In Docker this is set via UPLOAD_DIR (a mounted volume, e.g. /data/uploads).
+ * When unset (local dev) it falls back to `<cwd>/.local-data/uploads`.
  */
-export function getDataDir(): string {
-  return process.env.READER_DATA_DIR ?? resolve(process.cwd(), '.reader-data');
-}
-
-/** Absolute path to the SQLite database file inside the data dir. */
-export function getDbPath(dataDir = getDataDir()): string {
-  return join(dataDir, 'reader.db');
-}
-
-/** Prisma connection string for the SQLite DB (`file:<abs path>`). */
-export function getDatabaseUrl(dataDir = getDataDir()): string {
-  return `file:${getDbPath(dataDir)}`;
-}
-
-/** Absolute path to the uploads dir (stored .epub files + cover images). */
-export function getUploadDir(dataDir = getDataDir()): string {
-  return process.env.UPLOAD_DIR ?? join(dataDir, 'uploads');
+export function getUploadDir(): string {
+  return process.env.UPLOAD_DIR ?? resolve(process.cwd(), '.local-data', 'uploads');
 }

@@ -53,14 +53,16 @@ _Low risk, reversible. Do first to make the repo a clean web project._
 - ☐ (Optional, deferred) rename `@reader/*` package scope → `@cognal/*`
 - ✅ Verified: `pnpm install` clean (no electron), `@reader/web` + `@reader/api` both build.
 
-## Phase 1 — SQLite → PostgreSQL ☐
+## Phase 1 — SQLite → PostgreSQL ☑
 
-- ☐ `apps/api/prisma/schema.prisma`: datasource `provider = "postgresql"`
-- ☐ Remove the custom runtime migration runner in `apps/api/src/main.ts` (desktop-only)
-- ☐ Switch to standard `prisma migrate deploy` from the API container entrypoint
-- ☐ Reset migrations; generate a fresh Postgres baseline migration
-- ☐ Remove `READER_DATA_DIR` / `file:` DB-URL construction; use plain `DATABASE_URL=postgresql://…`
-- ☐ Keep uploads on a mounted Docker volume (revisit S3 if scaling past one box)
+- ☑ `apps/api/prisma/schema.prisma`: datasource `provider = "postgresql"`; `binaryTargets = ["native"]`
+- ☑ Remove the custom runtime migration runner in `apps/api/src/main.ts` (desktop-only)
+- ☑ Migrations applied via `prisma migrate deploy` (already in `apps/api/Dockerfile` CMD); local dev uses `prisma migrate dev`
+- ☑ Reset migrations; generated fresh Postgres baseline `20260531_init` (lock → postgresql)
+- ☑ Removed `READER_DATA_DIR` / `file:` DB-URL construction (`paths.ts` now only resolves `UPLOAD_DIR`); `main.ts` reads `DATABASE_URL` from env, binds `0.0.0.0:4000`, wires `CORS_ORIGINS`
+- ☑ Uploads stay on a mounted Docker volume (`UPLOAD_DIR=/data/uploads`)
+- ☑ Rewrote `apps/api/.env.example` for Postgres/web mode
+- ✅ Verified end-to-end: against a throwaway Postgres 16, migration applied, API booted, `GET /api/books` → `200 []`, local-user row created.
 
 ## Phase 2 — Auth.js (Google + email registration) ☐
 

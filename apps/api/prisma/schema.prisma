@@ -1,17 +1,16 @@
-// Prisma schema for the AI-assisted EPUB reader.
-// Models: User, Book, Chapter, ReadingProgress, Translation.
+// Prisma schema for Cognal (PostgreSQL).
+// Models: User, UserApiKey, Book, Chapter, ReadingProgress, Translation, SavedTranslation.
 
 generator client {
   provider = "prisma-client-js"
-  // Bundle both macOS query-engine binaries so the universal desktop app runs
-  // on Apple Silicon (darwin-arm64) AND Intel (darwin = x64). `native` covers
-  // whatever arch generates the client (dev / CI host). Prisma loads the
-  // engine matching the running process arch at startup.
-  binaryTargets = ["native", "darwin", "darwin-arm64"]
+  // `native` resolves to the engine for whatever platform runs `prisma generate`
+  // — the dev host locally and the linux container in Docker (generated in the
+  // same image it runs in), so no extra targets are needed for web deployment.
+  binaryTargets = ["native"]
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
