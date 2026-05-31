@@ -85,6 +85,18 @@ export class BooksService {
     return books.map((b) => this.toListItem(b, b.progress[0] ?? null));
   }
 
+  async remove(userId: string, bookId: string): Promise<void> {
+    const book = await this.requireOwned(userId, bookId);
+    // Cascade deletes chapters, progress and saved translations (see schema).
+    await this.prisma.book.delete({ where: { id: book.id } });
+    // Best-effort cleanup of on-disk files; ignore if already gone.
+    await Promise.all(
+      [book.filePath, book.coverPath]
+        .filter((p): p is string => Boolean(p))
+        .map((p) => fs.rm(p, { force: true })),
+    );
+  }
+
   async getDetail(userId: string, bookId: string): Promise<BookDetail> {
     const book = await this.prisma.book.findUnique({
       where: { id: bookId },

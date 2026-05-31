@@ -1,5 +1,6 @@
 import {
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -47,6 +48,12 @@ export class BooksController {
   @Get(':id')
   detail(@CurrentUser() user: JwtUser, @Param('id') id: string) {
     return this.books.getDetail(user.id, id);
+  }
+
+  @Delete(':id')
+  async remove(@CurrentUser() user: JwtUser, @Param('id') id: string) {
+    await this.books.remove(user.id, id);
+    return { ok: true };
   }
 
   @Get(':id/file')

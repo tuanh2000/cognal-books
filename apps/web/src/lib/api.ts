@@ -44,6 +44,7 @@ export const api = {
   /* ── Books ── */
   listBooks: () => request<BookListItem[]>('/books'),
   getBook: (id: string) => request<BookDetail>(`/books/${id}`),
+  deleteBook: (id: string) => request<{ ok: boolean }>(`/books/${id}`, { method: 'DELETE' }),
 
   uploadBook: async (file: File): Promise<BookDetail> => {
     const form = new FormData();
