@@ -65,6 +65,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The host is behind CGNAT (no public IPv4), so GitHub can't SSH in
+      # directly. Join the same Tailscale network as the host; the SSH/scp steps
+      # below then reach it on its private 100.x address (SSH_HOST = that IP).
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.TS_AUTHKEY }}
+          version: latest
+
       # Sync the prod compose + nginx config to the host (secrets stay in the
       # host's .env, which this never touches).
       - name: Copy deployment files to host
