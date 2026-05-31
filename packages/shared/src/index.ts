@@ -47,6 +47,47 @@ export interface AnalyticsSummary {
   daily: AnalyticsDailyPoint[];
 }
 
+export type SignupMethod = 'google' | 'email';
+
+export interface AdminUserRow {
+  id: string;
+  email: string;
+  name: string | null;
+  createdAt: string;
+  lastActive: string | null;
+  signupMethods: SignupMethod[];
+}
+
+export interface AdminUsersResponse {
+  total: number;
+  limit: number;
+  offset: number;
+  users: AdminUserRow[];
+}
+
+/* ──────────────────────────  Feedback  ────────────────────────── */
+
+export const submitFeedbackSchema = z.object({
+  message: z.string().min(1, 'Please write some feedback').max(4000),
+});
+export type SubmitFeedbackDto = z.infer<typeof submitFeedbackSchema>;
+
+export interface FeedbackItem {
+  id: string;
+  email: string;
+  message: string;
+  resolved: boolean;
+  createdAt: string;
+}
+
+export interface AdminFeedbackResponse {
+  total: number;
+  unresolved: number;
+  limit: number;
+  offset: number;
+  items: FeedbackItem[];
+}
+
 /* ──────────────────────────  Books  ────────────────────────── */
 
 /** Source format of a book. Drives which reader the frontend mounts. */

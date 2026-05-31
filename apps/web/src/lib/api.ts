@@ -1,5 +1,7 @@
 import type {
   AddApiKeyDto,
+  AdminFeedbackResponse,
+  AdminUsersResponse,
   AnalyticsSummary,
   ApiKeySummary,
   BookDetail,
@@ -137,6 +139,21 @@ export const api = {
 
   /* ── Admin analytics (admin only) ── */
   getAnalytics: (days = 30) => request<AnalyticsSummary>(`/admin/analytics/summary?days=${days}`),
+  getUsers: (limit = 25, offset = 0) =>
+    request<AdminUsersResponse>(`/admin/analytics/users?limit=${limit}&offset=${offset}`),
+
+  /* ── Feedback ── */
+  submitFeedback: (message: string) =>
+    request<{ id: string }>('/feedback', { method: 'POST', body: JSON.stringify({ message }) }),
+  getFeedback: (status: 'open' | 'resolved' | 'all' = 'all', limit = 25, offset = 0) =>
+    request<AdminFeedbackResponse>(
+      `/admin/feedback?status=${status}&limit=${limit}&offset=${offset}`,
+    ),
+  setFeedbackResolved: (id: string, resolved: boolean) =>
+    request<{ ok: boolean }>(`/admin/feedback/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ resolved }),
+    }),
 };
 
 /* ── Streaming translation (SSE over POST) ── */

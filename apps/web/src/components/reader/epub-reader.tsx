@@ -8,11 +8,14 @@ import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
+  Columns2,
   Home,
   Languages,
   Loader2,
   Minus,
+  PanelLeft,
   Plus,
+  ScrollText,
   Sparkles,
 } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -22,6 +25,7 @@ import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { TranslationPanel, type PanelRequest } from './translation-panel';
 import { DiscussPanel, type DiscussRequest } from './discuss-panel';
+import { TocSidebar } from './toc-sidebar';
 import { cn } from '@/lib/utils';
 
 interface SelectionState {
@@ -86,9 +90,13 @@ export function EpubReader({ bookId }: { bookId: string }) {
   const activeCfiRef = useRef<string | null>(null);
 
   const { resolvedTheme } = useTheme();
-  const { fontSize, setFontSize } = useReaderPrefs();
+  const { fontSize, setFontSize, readingMode, toggleReadingMode } = useReaderPrefs();
 
   const [loading, setLoading] = useState(true);
+  // TOC: inline on desktop, overlay drawer on mobile. Start open only on wide screens.
+  const [tocOpen, setTocOpen] = useState(
+    () => typeof window === 'undefined' || window.innerWidth >= 1024,
+  );
   const [toc, setToc] = useState<NavItem[]>([]);
   const [percentage, setPercentage] = useState(0);
   const [chapterLabel, setChapterLabel] = useState<string>('');
@@ -230,6 +238,7 @@ export function EpubReader({ bookId }: { bookId: string }) {
     let cancelled = false;
 
     async function init() {
+      setLoading(true);
       const [detail, buffer] = await Promise.all([api.getBook(bookId), api.getBookFile(bookId)]);
       if (cancelled || !viewerRef.current) return;
 
@@ -243,14 +252,19 @@ export function EpubReader({ bookId }: { bookId: string }) {
       const book = ePub(buffer);
       bookRef.current = book;
 
+      const paginated = readingMode === 'paginated';
       const rendition = book.renderTo(viewerRef.current, {
         width: '100%',
         height: '100%',
-        // Continuous vertical scroll (no page breaks) so a paragraph that used to
-        // straddle a page boundary renders whole and can be selected/translated in
-        // one go. prev()/next() (side arrows + ←/→ keys) scroll by one viewport.
-        flow: 'scrolled',
-        manager: 'continuous',
+        // Two reading modes:
+        // - scroll: continuous vertical scroll (no page breaks) so a paragraph
+        //   that used to straddle a page boundary renders whole; prev()/next()
+        //   (arrows + ←/→) scroll by one viewport.
+        // - paginated: classic page-turn columns; `spread: 'auto'` shows two
+        //   pages on wide screens and one on narrow/mobile.
+        flow: paginated ? 'paginated' : 'scrolled',
+        manager: paginated ? 'default' : 'continuous',
+        spread: 'auto',
         // EPUB.js renders chapters into an `about:srcdoc` iframe, which browser
         // translation extensions cannot reach. The only alternative render
         // method (`blobUrl`) breaks rendering with this engine version, so we
@@ -352,8 +366,10 @@ export function EpubReader({ bookId }: { bookId: string }) {
       if (selectionTimer.current) clearTimeout(selectionTimer.current);
       bookRef.current?.destroy();
     };
+    // Re-initialise when the reading mode changes (EPUB.js can't switch flow on
+    // an existing rendition); it re-displays at the last saved position.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookId]);
+  }, [bookId, readingMode]);
 
   // ── Re-apply theme / font size when they change. ──
   useEffect(() => {
@@ -390,8 +406,9 @@ export function EpubReader({ bookId }: { bookId: string }) {
   }
 
   const goTo = (href: string) => {
-    // The contents sidebar is always visible, so navigating just changes the page.
     renditionRef.current?.display(href);
+    // On mobile the TOC is an overlay — close it after picking a chapter.
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) setTocOpen(false);
   };
 
   const panelOpen = translateRequest != null;
@@ -399,9 +416,23 @@ export function EpubReader({ bookId }: { bookId: string }) {
   return (
     <div className="relative flex h-screen flex-col overflow-hidden bg-background">
       {/* Top bar */}
-      <header className="flex h-14 shrink-0 items-center justify-between border-b px-3">
-        <div className="flex items-center gap-1">
-          <Button asChild variant="ghost" size="icon" aria-label="Home">
+      <header className="flex h-14 shrink-0 items-center justify-between gap-1 border-b px-2 sm:px-3">
+        <div className="flex items-center gap-0.5 sm:gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Toggle contents"
+            onClick={() => setTocOpen((o) => !o)}
+          >
+            <PanelLeft className="h-5 w-5" />
+          </Button>
+          <Button
+            asChild
+            variant="ghost"
+            size="icon"
+            aria-label="Home"
+            className="hidden sm:inline-flex"
+          >
             <Link href="/">
               <Home className="h-5 w-5" />
             </Link>
@@ -413,9 +444,24 @@ export function EpubReader({ bookId }: { bookId: string }) {
           </Button>
         </div>
 
-        <p className="line-clamp-1 px-2 text-sm text-muted-foreground">{chapterLabel}</p>
+        <p className="line-clamp-1 min-w-0 flex-1 px-1 text-center text-sm text-muted-foreground">
+          {chapterLabel}
+        </p>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5 sm:gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={readingMode === 'scroll' ? 'Switch to page view' : 'Switch to scroll view'}
+            title={readingMode === 'scroll' ? 'Scroll mode' : 'Page mode'}
+            onClick={toggleReadingMode}
+          >
+            {readingMode === 'scroll' ? (
+              <ScrollText className="h-5 w-5" />
+            ) : (
+              <Columns2 className="h-5 w-5" />
+            )}
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -437,12 +483,9 @@ export function EpubReader({ bookId }: { bookId: string }) {
       </header>
 
       {/* Body */}
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* Table of contents — always-visible sidebar */}
-        <aside className="w-72 shrink-0 overflow-y-auto border-r bg-card p-4">
-          <h3 className="mb-3 px-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Contents
-          </h3>
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        {/* Table of contents — inline on desktop, overlay drawer on mobile */}
+        <TocSidebar open={tocOpen} onClose={() => setTocOpen(false)}>
           <nav className="space-y-0.5">
             {toc.map((item) => (
               <button
@@ -454,7 +497,7 @@ export function EpubReader({ bookId }: { bookId: string }) {
               </button>
             ))}
           </nav>
-        </aside>
+        </TocSidebar>
 
         {/* Reading area */}
         <div className="relative min-h-0 flex-1 overflow-hidden">
@@ -491,7 +534,7 @@ export function EpubReader({ bookId }: { bookId: string }) {
             The wide max-width lets `spread: 'auto'` show a two-page spread on
             desktop while collapsing to one page on narrow/mobile screens, and
             scales up to use large screens (more content per page). */}
-          <div className="mx-auto h-full w-full max-w-[1600px] px-10 lg:px-16">
+          <div className="mx-auto h-full w-full max-w-[1600px] px-4 sm:px-8 lg:px-16">
             <div ref={viewerRef} className="h-full w-full" />
           </div>
 
